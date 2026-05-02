@@ -488,7 +488,8 @@ export function SettingsDialog({
                     bottom: window.innerHeight - languageMenuRect.top + 6,
                     left: languageMenuRect.left,
                     width: languageMenuRect.width,
-                  }}
+                    '--menu-available-h': `${languageMenuRect.top - 6}px`,
+                  } as React.CSSProperties}
                 >
                   {LOCALES.map((code) => {
                     const active = locale === code;
