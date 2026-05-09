@@ -7,6 +7,7 @@ export * from './atoms/build-test.js';
 export * from './atoms/code-import.js';
 export * from './atoms/design-extract.js';
 export * from './atoms/handoff.js';
+export * from './atoms/rewrite-plan.js';
 export * from './bundled.js';
 export * from './connector-gate.js';
 export * from './export.js';
