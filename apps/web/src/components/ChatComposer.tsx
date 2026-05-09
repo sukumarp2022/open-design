@@ -15,6 +15,7 @@ import type { McpServerConfig } from "../state/mcp";
 import type { AppConfig, ChatAttachment, ChatCommentAttachment, ProjectFile, ProjectMetadata } from "../types";
 import type { ResearchOptions } from '@open-design/contracts';
 import { Icon } from "./Icon";
+import { PluginsSection } from "./PluginsSection";
 import { BUILT_IN_PETS, CUSTOM_PET_ID, resolveActivePet } from "./pet/pets";
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
@@ -686,6 +687,25 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               attachments={commentAttachments}
               onRemove={(id) => onRemoveCommentAttachment?.(id)}
               t={t}
+            />
+          ) : null}
+          {/*
+            Phase 2B / spec §8.4 — inline plugins rail above the
+            composer input. The rail is a slim horizontal strip so it
+            stays out of the way of the existing chat input chrome;
+            applying a plugin hydrates the draft with the rendered
+            brief, leaving the existing send / @-mention / staged
+            attachment flows untouched.
+          */}
+          {projectId ? (
+            <PluginsSection
+              projectId={projectId}
+              variant="strip"
+              onApplied={(brief) => {
+                if (typeof brief === 'string' && brief.length > 0 && draft.trim().length === 0) {
+                  setDraft(brief);
+                }
+              }}
             />
           ) : null}
           <div className="composer-input-wrap">
