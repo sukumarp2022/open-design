@@ -1,20 +1,13 @@
 # Open Design Helm chart
 
 > Spec §15.5 reference deployment.
-> Status: **values surface locked, templates pending.**
+> Status: **values + templates shipped; per-cloud override files pending.**
 
-This chart is the parameter contract Phase 5 standardised on. The
-`templates/` directory is intentionally absent in this slice — the
-follow-up PR that lands the Kubernetes manifests will consume the
-same `values.yaml` schema.
-
-## Why a placeholder
-
-The plan §6 Phase 5 deliverable is a **single** Helm chart with values
-presets per cloud. Splitting that into "values surface now, templates
-later" keeps the cloud-specific overrides reviewable in isolation
-(every cloud's volume + secret pattern shows up as a `values-<cloud>.yaml`
-override file).
+The chart's `templates/` covers the canonical Kubernetes shape:
+Deployment, Service, Secret, ConfigMap, two PVCs (`/data/od` +
+`/data/config`), and an optional Ingress. Every parameter is
+exposed in `values.yaml` so the per-cloud override files can stay
+small (volume + secret backend differences only).
 
 ## Cloud overrides (planned values files)
 
