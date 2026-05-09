@@ -108,8 +108,13 @@ This section tracks **what exists in the repo today**. Update in the same PR tha
 | `apps/daemon/src/plugins/pipeline.ts` | shipped | Phase 2A — devloop scheduler + `until` evaluator + `OD_MAX_DEVLOOP_ITERATIONS` |
 | `apps/daemon/src/plugins/pipeline-runner.ts` | shipped | Phase 2A — runs pipeline against a live run, emits stage + GenUI events |
 | `apps/daemon/src/plugins/resolve-snapshot.ts` | shipped | Phase 2A — snapshot resolver wired into `POST /api/projects` + `/api/runs` |
-| `apps/daemon/src/plugins/marketplaces.ts` | shipped | Phase 3 entry slice — add / list / refresh / remove / trust |
+| `apps/daemon/src/plugins/marketplaces.ts` | shipped | Phase 3 — add / list / refresh / remove / trust + `resolvePluginInMarketplaces` |
 | `apps/daemon/src/plugins/gc.ts` | shipped | Phase 5 (early) — snapshot GC worker + boot sweep |
+| `apps/daemon/src/plugins/scaffold.ts` | shipped | Phase 4 — `od plugin scaffold` starter generator |
+| `apps/daemon/src/plugins/export.ts` | shipped | Phase 4 — `od plugin export <projectId> --as …` |
+| `apps/daemon/src/plugins/publish.ts` | shipped | Phase 4 — `od plugin publish --to <catalog>` URL builder |
+| `apps/daemon/src/plugins/bundled.ts` | shipped | Phase 4 (§23.3.5 entry slice) — boot walker for `plugins/_official/**` |
+| `plugins/_official/atoms/<atom>/{SKILL.md,open-design.json}` | shipped | Phase 4 (§23.3.2 entry slice) — bundled atom SKILL.md fragments |
 | `apps/daemon/src/plugins/trust.ts` | shipped | Phase 1 + Phase 2A — `validateCapabilityList`, `grantCapabilities`, `revokeCapabilities` |
 | `apps/daemon/src/plugins/doctor.ts` | shipped | Phase 1 (manifest + atom + ref checks) → expanded Phase 3 |
 | `apps/daemon/src/genui/registry.ts` | shipped | Phase 2A — F8 cross-conversation cache + lifecycle |
@@ -438,8 +443,8 @@ Deliverables
 - [x] `od plugin run <id> --input k=v --follow` (apply + run start wrapper) — landed in §3.B3 (Phase 2A). Full ND-JSON streaming via `od run watch` is also shipped (Phase 1 follow-up §3.F1).
 - [x] `od plugin scaffold` interactive starter — `apps/daemon/src/plugins/scaffold.ts`.
 - [x] `od plugin publish --to anthropics-skills|awesome-agent-skills|clawhub|skills-sh` (PR template launcher) — `apps/daemon/src/plugins/publish.ts`.
-- [x] CLI parity remainder (mostly): `od skills/design-systems/craft/atoms list/show`, `od status`, `od version`, `od marketplace search`. Still open: `od doctor` (repo-wide diagnostics) and `od config get/set/list/unset`.
-- [ ] Optional `plugins/_official/atoms/<atom>/SKILL.md` extraction (spec §23.3.2 patch 2).
+- [x] CLI parity remainder: `od skills/design-systems/craft/atoms list/show`, `od status`, `od version`, `od marketplace search`, `od doctor`, `od config get/set/list/unset`.
+- [x] Optional `plugins/_official/atoms/<atom>/SKILL.md` extraction (spec §23.3.2 patch 2) — entry slice ships four atom SKILL.md fragments + the bundled boot walker; the system.ts → SKILL.md prompt-composer rewiring stays open.
 - [ ] `@open-design/agui-adapter` package; `GET /api/runs/:runId/agui` SSE endpoint emits AG-UI canonical events.
 - [ ] Plugin manifest upgrade: `od.genui.surfaces[].component` (capability gate `genui:custom-component`).
 
@@ -501,8 +506,8 @@ v1 ships when **all** of the following pass on a clean Linux CI container withou
   - Test path: `apps/daemon/tests/plugins-e2e-fixture.test.ts`
 - [x] **e2e-2 pure apply** — two consecutive applies share `manifestSourceDigest`; the project cwd byte size is unchanged; `applied_plugin_snapshots` is not written by `applyPlugin()` itself (the resolver is the writer).
   - Test path: `apps/daemon/tests/plugins-dod-e2e.test.ts` (`e2e-2 pure apply across runs`).
-- [x] **e2e-3 headless run (entry slice)** — install → project create → run start → status → snapshot fetch all walked at the HTTP layer with no electron / no agent backend; the run carries the same `appliedPluginSnapshotId` the project was created with. The full §8 e2e-3 contract ('first ND-JSON event has `kind=pipeline_stage_started`') needs the run-time pipeline runner being plugged into the live agent loop, which is deferred to the next PR.
-  - Test path: `apps/daemon/tests/plugins-headless-run.test.ts`.
+- [x] **e2e-3 headless run (full §8 contract).** Install → project create → run start → status → snapshot fetch all walked at the HTTP layer; the run's first SSE event is `pipeline_stage_started` (asserted via the live SSE stream) and the snapshot id is pinned through every step. `firePipelineForRun()` runs synchronously inside `POST /api/runs` before `design.runs.start()` schedules the agent.
+  - Test path: `apps/daemon/tests/plugins-headless-run.test.ts` (both `walks install → project create → run start → status with snapshot pinned` and `first SSE event on a plugin run with od.pipeline is pipeline_stage_started`).
 - [x] **e2e-4 replay invariance** — after a same-id plugin upgrade, `renderPluginBlock(snapshot)` returns the byte-equal prompt block; the live applyPlugin against the upgraded plugin produces a different `manifestSourceDigest`.
   - Test path: `apps/daemon/tests/plugins-dod-e2e.test.ts` (`e2e-4 replay invariance`).
 - [x] **e2e-5 GenUI cross-conversation** — second conversation in the same project does not broadcast a fresh `genui_surface_request`; it emits `genui_surface_response { respondedBy: 'cache' }` instead.
@@ -529,10 +534,10 @@ Plus repo-wide gates
 
 | Field | Value |
 | --- | --- |
-| Current phase | Phase 2A + 1 + 1.5 + 2B (composer mount + ChatComposer mount + marketplace deep UI) + 2C entry slice + 3 (full incl. `od plugin install <name>` + marketplace search) + 4 (scaffold + export + publish + atoms doc + library/status/version CLI) + early 5 |
-| Next planned PR | Plug `runPipelineForRun()` into the live agent loop in `startChatRun()` (lifts e2e-3 from entry-slice to the full §8 'first SSE event = `pipeline_stage_started`' contract); Phase 4 atom migration into `plugins/_official/atoms/<atom>/SKILL.md`; Phase 4 AG-UI adapter package; Phase 5 Docker image |
+| Current phase | Phase 2A + 1 + 1.5 + 2B + 2C entry slice + 3 (full) + 4 (scaffold + export + publish + atoms doc + library/status/version CLI + doctor + config + bundled atoms boot walker + pipeline-into-startChatRun) + early 5 |
+| Next planned PR | composeSystemPrompt() reads atom prompt fragments from `plugins/_official/atoms/<atom>/SKILL.md` instead of inline `system.ts` constants (spec §23.3.2 patch 2); `@open-design/agui-adapter` package + `GET /api/runs/:runId/agui` (Phase 4); `od.genui.surfaces[].component` plugin manifest upgrade (Phase 4); Phase 5 Docker image + Postgres / S3 adapters |
 | Open spec push-backs | none — PB1 / PB2 resolved (see §7) |
-| Last sync against `docs/plugins-spec.md` | 2026-05-09 (Phase 4 publish + library CLI parity + craft route + marketplace search landing) |
+| Last sync against `docs/plugins-spec.md` | 2026-05-09 (Phase 4 doctor + config + bundled atoms + pipeline-into-startChatRun + e2e-3 full contract landing) |
 
 Update this table on every plugin-system PR merge. When the value of "Current phase" advances, also flip the matching deliverables in §6 and the modules in §3.
 
