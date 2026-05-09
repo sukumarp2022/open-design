@@ -3292,6 +3292,55 @@ export async function startServer({
     }
   });
 
+  // Plan §3.A2 / spec §9.1: persistent capability grant. Body is
+  // `{ capabilities: string[], action?: 'grant' | 'revoke' }`. The daemon
+  // validates each entry against the §5.3 vocabulary; unknown / malformed
+  // strings come back as 400 with the offending list so the CLI can
+  // render exit-code-2 usage advice. The mutation goes through
+  // `grantCapabilities` / `revokeCapabilities` (the only writers of
+  // `installed_plugins.capabilities_granted` outside of install).
+  app.post('/api/plugins/:id/trust', async (req, res) => {
+    try {
+      const plugin = getInstalledPlugin(db, req.params.id);
+      if (!plugin) return res.status(404).json({ error: 'plugin not found' });
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const action = body.action === 'revoke' ? 'revoke' : 'grant';
+      const { validateCapabilityList, grantCapabilities, revokeCapabilities } =
+        await import('./plugins/trust.js');
+      const { accepted, rejected } = validateCapabilityList(body.capabilities);
+      if (rejected.length > 0) {
+        return res.status(400).json({
+          error: {
+            code: 'invalid-capability',
+            message: `Capability validation failed: ${rejected.map((r) => r.capability).join(', ')}`,
+            data: { rejected },
+          },
+        });
+      }
+      if (accepted.length === 0) {
+        return res.status(400).json({
+          error: {
+            code: 'no-capabilities',
+            message: 'capabilities[] is required and must contain at least one entry',
+          },
+        });
+      }
+      const next = action === 'revoke'
+        ? revokeCapabilities({ db, pluginId: req.params.id, capabilities: accepted })
+        : grantCapabilities({ db, pluginId: req.params.id, capabilities: accepted });
+      const updated = getInstalledPlugin(db, req.params.id);
+      res.status(action === 'grant' ? 201 : 200).json({
+        ok: true,
+        id: req.params.id,
+        action,
+        capabilitiesGranted: next,
+        plugin: updated,
+      });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   app.get('/api/atoms', (_req, res) => {
     res.json({ atoms: FIRST_PARTY_ATOMS.map((a) => ({ ...a, taskKinds: a.taskKinds.slice() })) });
   });
@@ -5359,12 +5408,28 @@ export async function startServer({
     const attachmentHint = safeAttachments.length
       ? `\n\nAttached project files: ${safeAttachments.map((p) => `\`${p}\``).join(', ')}`
       : '';
+    // Plan §3.A3 / spec §9: thread plugin context onto every tool token
+    // so the connector execute route can re-validate the §5.3
+    // capability gate without re-reading the SQLite snapshot row.
+    let pluginGrantContext = null;
+    if (cwd && typeof projectId === 'string' && projectId && run?.appliedPluginSnapshotId) {
+      const snap = getSnapshot(db, run.appliedPluginSnapshotId);
+      if (snap) {
+        const installed = getInstalledPlugin(db, snap.pluginId);
+        pluginGrantContext = {
+          pluginSnapshotId: snap.snapshotId,
+          pluginTrust: installed?.trust ?? 'restricted',
+          pluginCapabilitiesGranted: snap.capabilitiesGranted ?? [],
+        };
+      }
+    }
     const toolTokenGrant = cwd && typeof projectId === 'string' && projectId
       ? toolTokenRegistry.mint({
           runId,
           projectId,
           allowedEndpoints: CHAT_TOOL_ENDPOINTS,
           allowedOperations: CHAT_TOOL_OPERATIONS,
+          ...(pluginGrantContext ?? {}),
         })
       : null;
     let toolTokenRevoked = false;

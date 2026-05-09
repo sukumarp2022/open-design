@@ -76,11 +76,15 @@ const PLUGIN_STRING_FLAGS = new Set([
   'project',
   'snapshot-id',
   'capabilities',
+  'grant-caps',
+  'before',
 ]);
 const PLUGIN_BOOLEAN_FLAGS = new Set([
   'help',
   'h',
   'json',
+  'revoke',
+  'follow',
 ]);
 
 const UI_STRING_FLAGS = new Set([
@@ -1004,9 +1008,10 @@ async function runPluginReplay(rest) {
 }
 
 // `od plugin trust <id> --capabilities <comma-sep>` — flip a plugin's
-// capabilities_granted set. Phase 2A wires trust capabilities (per-id
-// connector grants etc.); Phase 3 layers in the marketplace trust UI on
-// top. The CLI is the canonical write surface (invariant I4).
+// capabilities_granted set. Plan §3.A2 / spec §9.1: the CLI is the
+// canonical write surface (invariant I4). The daemon validates the
+// capability vocabulary; unknown / malformed entries surface as
+// exit-2 usage failures.
 async function runPluginTrust(rest) {
   const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
   const id = rest.find((a) => !a.startsWith('-')
@@ -1017,23 +1022,40 @@ async function runPluginTrust(rest) {
     && a !== flags['snapshot-id']
     && a !== flags.capabilities);
   if (!id) {
-    console.error('Usage: od plugin trust <id> --capabilities connector:figma,connector:notion');
+    console.error('Usage: od plugin trust <id> --capabilities connector:figma,connector:notion [--revoke]');
     process.exit(2);
   }
-  const caps = typeof flags.capabilities === 'string' && flags.capabilities.trim().length > 0
-    ? flags.capabilities.split(',').map((c) => c.trim()).filter(Boolean)
-    : [];
-  // Trust mutation goes through the existing `installed_plugins` row;
-  // Phase 3 adds the dedicated `/api/plugins/:id/trust` endpoint so this
-  // CLI handler will switch endpoints without changing the user surface.
-  // Until then, surface the action as a no-op against the v1 daemon and
-  // document the deferred behaviour.
-  process.stdout.write(JSON.stringify({
-    ok:       true,
-    pluginId: id,
-    granted:  caps,
-    note:     'Phase 2A registers the CLI surface; the /api/plugins/:id/trust mutation lands in Phase 3.',
-  }, null, 2) + '\n');
+  const capsCsv = typeof flags.capabilities === 'string' ? flags.capabilities : '';
+  const caps = capsCsv.split(',').map((c) => c.trim()).filter(Boolean);
+  if (caps.length === 0) {
+    console.error('--capabilities is required (comma-separated, e.g. connector:figma,fs:read)');
+    process.exit(2);
+  }
+  const action = flags.revoke ? 'revoke' : 'grant';
+  const url = `${pluginDaemonUrl(flags).replace(/\/$/, '')}/api/plugins/${encodeURIComponent(id)}/trust`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ capabilities: caps, action }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    if (resp.status === 400 && data?.error?.code === 'invalid-capability') {
+      const rej = (data.error.data?.rejected ?? [])
+        .map((r) => `${r.capability} (${r.reason})`)
+        .join(', ');
+      console.error(`[trust] invalid capabilities: ${rej}`);
+      process.exit(2);
+    }
+    console.error(`POST ${url} failed: ${resp.status} ${JSON.stringify(data)}`);
+    process.exit(1);
+  }
+  if (flags.json) {
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    return;
+  }
+  console.log(`[trust] ${action === 'grant' ? 'granted' : 'revoked'} on ${id}: ${caps.join(', ')}`);
+  console.log(`[trust] now: ${(data.capabilitiesGranted ?? []).join(', ')}`);
 }
 
 // ---------------------------------------------------------------------------
