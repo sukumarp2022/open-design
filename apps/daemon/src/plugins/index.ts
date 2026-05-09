@@ -27,6 +27,12 @@ export {
   type PluginDiffReport,
   type PluginDiffEntry,
 } from './diff.js';
+export {
+  diffSnapshots,
+  type DiffSnapshotsInput,
+  type SnapshotDiffReport,
+  type SnapshotDiffEntry,
+} from './snapshot-diff.js';
 export * from './atoms/build-test.js';
 export * from './atoms/code-import.js';
 export * from './atoms/design-extract.js';

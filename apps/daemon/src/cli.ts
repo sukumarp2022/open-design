@@ -1287,11 +1287,83 @@ async function runPluginSnapshots(args) {
   if (!sub || sub === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
   od plugin snapshots list  [--project <id>]               List applied plugin snapshots.
+  od plugin snapshots show  <snapshotId> [--json]          Print one snapshot's full contents.
+  od plugin snapshots diff  <id-a> <id-b> [--json]         Compare two snapshots field-by-field.
   od plugin snapshots prune [--before <unix-ms>]           Delete expired (or older-than-cutoff) snapshots.`);
     process.exit(args.length === 0 ? 2 : 0);
   }
   const flags = parseFlags(args.slice(1), { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
   const base = pluginDaemonUrl(flags).replace(/\/$/, '');
+  if (sub === 'show') {
+    const positional = args.slice(1).filter((a) => !a.startsWith('-'));
+    const id = positional[0];
+    if (!id) {
+      console.error('Usage: od plugin snapshots show <snapshotId>');
+      process.exit(2);
+    }
+    const url = `${base}/api/applied-plugins/${encodeURIComponent(id)}`;
+    const resp = await fetch(url);
+    if (resp.status === 404) {
+      console.error(`snapshot ${id} not found`);
+      process.exit(72);
+    }
+    if (!resp.ok) {
+      console.error(`GET ${url} failed: ${resp.status} ${await resp.text()}`);
+      process.exit(1);
+    }
+    const data = await resp.json();
+    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    return;
+  }
+  if (sub === 'diff') {
+    const positional = args.slice(1).filter((a) => !a.startsWith('-'));
+    if (positional.length < 2) {
+      console.error('Usage: od plugin snapshots diff <id-a> <id-b>');
+      process.exit(2);
+    }
+    const [idA, idB] = positional;
+    const [respA, respB] = await Promise.all([
+      fetch(`${base}/api/applied-plugins/${encodeURIComponent(idA)}`),
+      fetch(`${base}/api/applied-plugins/${encodeURIComponent(idB)}`),
+    ]);
+    if (respA.status === 404) { console.error(`snapshot ${idA} not found`); process.exit(72); }
+    if (respB.status === 404) { console.error(`snapshot ${idB} not found`); process.exit(72); }
+    if (!respA.ok || !respB.ok) {
+      console.error(`fetch failed: ${respA.status} / ${respB.status}`);
+      process.exit(1);
+    }
+    const a = await respA.json();
+    const b = await respB.json();
+    const { diffSnapshots } = await import('./plugins/snapshot-diff.js');
+    const report = diffSnapshots({ a, b });
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      return;
+    }
+    const digestNote = report.digestEqual
+      ? '\u2713 manifestSourceDigest equal (e2e-2 invariant holds)'
+      : '\u2717 manifestSourceDigest DIFFERS (replay would diverge)';
+    console.log(`[snapshots diff] ${idA} \u2194 ${idB}`);
+    console.log(`  ${digestNote}`);
+    console.log(`  ${report.added} added, ${report.removed} removed, ${report.changed} changed`);
+    if (report.entries.length === 0) {
+      console.log('  (no field-level differences)');
+      return;
+    }
+    for (const e of report.entries) {
+      const tag = e.kind === 'added' ? '+' : e.kind === 'removed' ? '-' : '~';
+      if (e.summary) {
+        console.log(`  ${tag} ${e.field}  (${e.summary})`);
+      } else if (e.kind === 'changed') {
+        console.log(`  ${tag} ${e.field}: ${e.before ?? ''} \u2192 ${e.after ?? ''}`);
+      } else if (e.kind === 'added') {
+        console.log(`  ${tag} ${e.field}: ${e.after ?? ''}`);
+      } else {
+        console.log(`  ${tag} ${e.field}: ${e.before ?? ''}`);
+      }
+    }
+    return;
+  }
   if (sub === 'list') {
     const url = flags.project
       ? `${base}/api/projects/${encodeURIComponent(flags.project)}/applied-plugins`
