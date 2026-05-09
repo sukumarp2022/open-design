@@ -17,6 +17,7 @@ import {
   listMarketplaces,
   refreshMarketplace,
   removeMarketplace,
+  resolvePluginInMarketplaces,
   setMarketplaceTrust,
 } from '../src/plugins/marketplaces.js';
 
@@ -123,5 +124,54 @@ describe('marketplaces', () => {
     expect(trusted?.trust).toBe('trusted');
     expect(removeMarketplace(db, added.row.id)).toBe(true);
     expect(getMarketplace(db, added.row.id)).toBeNull();
+  });
+});
+
+describe('resolvePluginInMarketplaces', () => {
+  it('returns the canonical source string for a known plugin name', async () => {
+    await addMarketplace(db, {
+      url: 'https://example.com/marketplace.json',
+      fetcher: fixtureFetcher(VALID_MANIFEST),
+    });
+    const resolved = resolvePluginInMarketplaces(db, 'sample-plugin');
+    expect(resolved).not.toBeNull();
+    expect(resolved!.source).toBe('github:open-design/sample-plugin');
+    expect(resolved!.marketplaceTrust).toBe('restricted');
+  });
+
+  it('matches case-insensitively', async () => {
+    await addMarketplace(db, {
+      url: 'https://example.com/marketplace.json',
+      fetcher: fixtureFetcher(VALID_MANIFEST),
+    });
+    const resolved = resolvePluginInMarketplaces(db, 'SAMPLE-PLUGIN');
+    expect(resolved?.pluginName).toBe('sample-plugin');
+  });
+
+  it('returns null when no marketplace knows the name', async () => {
+    expect(resolvePluginInMarketplaces(db, 'mystery')).toBeNull();
+    await addMarketplace(db, {
+      url: 'https://example.com/marketplace.json',
+      fetcher: fixtureFetcher(VALID_MANIFEST),
+    });
+    expect(resolvePluginInMarketplaces(db, 'mystery')).toBeNull();
+  });
+
+  it('walks marketplaces in registration order, first hit wins', async () => {
+    const otherManifest = JSON.stringify({
+      name: 'other',
+      plugins: [{ name: 'sample-plugin', source: 'github:other/sample' }],
+    });
+    const first = await addMarketplace(db, {
+      url: 'https://first.example/marketplace.json',
+      fetcher: fixtureFetcher(otherManifest),
+    });
+    const second = await addMarketplace(db, {
+      url: 'https://second.example/marketplace.json',
+      fetcher: fixtureFetcher(VALID_MANIFEST),
+    });
+    if (!first.ok || !second.ok) throw new Error('setup failed');
+    const resolved = resolvePluginInMarketplaces(db, 'sample-plugin');
+    expect(resolved?.source).toBe('github:other/sample');
   });
 });

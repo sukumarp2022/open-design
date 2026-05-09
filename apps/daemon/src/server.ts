@@ -3254,23 +3254,35 @@ export async function startServer({
 
   app.post('/api/plugins/install', async (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const source = typeof body.source === 'string' ? body.source : '';
+    let source = typeof body.source === 'string' ? body.source : '';
     if (!source) {
       return res.status(400).json({ error: 'source is required' });
     }
     // Plan §3.A6: accept local folder, github:owner/repo[@ref][/subpath],
-    // and https://*.tar.gz / *.tgz sources. Other shapes are 400 so the
-    // error surface is clear.
-    const supportedShape =
-      source.startsWith('/') ||
-      source.startsWith('./') ||
-      source.startsWith('~') ||
-      source.startsWith('github:') ||
-      /^https:\/\//i.test(source);
-    if (!supportedShape) {
-      return res.status(400).json({
-        error: `Unsupported install source '${source}'. Accepted: local folder, github:owner/repo[@ref][/subpath], https://*.tar.gz`,
-      });
+    // and https://*.tar.gz / *.tgz sources. Plan §3.F3: also accept a
+    // bare plugin name and resolve it through the configured marketplaces.
+    // Other shapes are 400 so the error surface is clear.
+    const looksAbsolute = source.startsWith('/') || source.startsWith('./') || source.startsWith('~');
+    const looksGithub = source.startsWith('github:');
+    const looksHttps = /^https:\/\//i.test(source);
+    if (!looksAbsolute && !looksGithub && !looksHttps) {
+      // Treat the source as a plugin name and look it up in the
+      // marketplace registry. Match resolution returns the canonical
+      // source (github:… / https://…) so the installer can replay
+      // the same byte path that would happen if the user copy-pasted
+      // the source manually.
+      const { resolvePluginInMarketplaces } = await import('./plugins/marketplaces.js');
+      const resolved = resolvePluginInMarketplaces(db, source);
+      if (!resolved) {
+        return res.status(404).json({
+          error: {
+            code: 'plugin-not-found',
+            message: `No marketplace plugin named "${source}". Add a marketplace via 'od marketplace add <url>' or pass a github: / https:// / local source.`,
+            data: { name: source },
+          },
+        });
+      }
+      source = resolved.source;
     }
 
     res.setHeader('Content-Type', 'text/event-stream');

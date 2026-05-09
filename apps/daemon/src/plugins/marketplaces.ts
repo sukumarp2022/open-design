@@ -229,3 +229,49 @@ function safeParseManifest(raw: string): MarketplaceManifest {
     plugins: [],
   } as MarketplaceManifest;
 }
+
+// Plan §3.F3 / spec §7.2 + §6 — resolve a bare plugin name through
+// every configured marketplace. Returns the first match (marketplace
+// scan order matches `listMarketplaces` output, which is sorted by
+// `added_at` ASC). The match carries the marketplace id (so audit
+// trails record which catalog the install came from) and the resolved
+// `source` string the installer can re-feed into `installPlugin()`.
+//
+// `restricted` marketplaces still resolve names — the plugin install
+// path does NOT auto-trust the resulting plugin (it stays
+// `restricted` per spec §9 unless the marketplace was explicitly
+// `trusted` at add-time).
+export interface ResolvedPluginEntry {
+  marketplaceId: string;
+  marketplaceUrl: string;
+  marketplaceTrust: MarketplaceTrustTier;
+  pluginName: string;
+  source: string;
+  description?: string;
+}
+
+export function resolvePluginInMarketplaces(
+  db: SqliteDb,
+  pluginName: string,
+): ResolvedPluginEntry | null {
+  const rows = listMarketplaces(db);
+  const target = pluginName.trim().toLowerCase();
+  if (!target) return null;
+  for (const row of rows) {
+    const entries = row.manifest.plugins ?? [];
+    for (const entry of entries) {
+      if (entry.name && entry.name.toLowerCase() === target) {
+        const result: ResolvedPluginEntry = {
+          marketplaceId:    row.id,
+          marketplaceUrl:   row.url,
+          marketplaceTrust: row.trust,
+          pluginName:       entry.name,
+          source:           entry.source,
+        };
+        if (entry.description) result.description = entry.description;
+        return result;
+      }
+    }
+  }
+  return null;
+}

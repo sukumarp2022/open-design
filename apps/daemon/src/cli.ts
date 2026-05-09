@@ -1102,7 +1102,11 @@ async function runPluginInstall(rest) {
   const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
   const source = typeof flags.source === 'string' ? flags.source : rest.find((a) => !a.startsWith('-'));
   if (!source) {
-    console.error('Usage: od plugin install --source <path>');
+    console.error('Usage: od plugin install <source-or-name>\n' +
+      '       od plugin install ./local-folder\n' +
+      '       od plugin install github:owner/repo[@ref][/subpath]\n' +
+      '       od plugin install https://example.com/plugin.tar.gz\n' +
+      '       od plugin install <name>      # resolves through configured marketplaces');
     process.exit(2);
   }
   const url = `${pluginDaemonUrl(flags).replace(/\/$/, '')}/api/plugins/install`;
