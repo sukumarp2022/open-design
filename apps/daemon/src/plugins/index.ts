@@ -4,6 +4,7 @@
 export * from './atoms.js';
 export * from './apply.js';
 export * from './atoms/build-test.js';
+export * from './atoms/code-import.js';
 export * from './bundled.js';
 export * from './connector-gate.js';
 export * from './export.js';
