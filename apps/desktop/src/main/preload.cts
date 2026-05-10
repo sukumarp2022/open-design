@@ -28,3 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openPath: (projectId: string): Promise<string> =>
     ipcRenderer.invoke('shell:open-path', projectId),
 });
+
+contextBridge.exposeInMainWorld('__odDesktop', {
+  printPdf: (html: string, nonce?: string) => ipcRenderer.invoke('od:print-pdf', html, nonce),
+  isDesktop: true,
+});

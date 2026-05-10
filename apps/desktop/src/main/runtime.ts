@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { DesktopExportPdfInput, DesktopExportPdfResult } from "@open-design/sidecar-proto";
 
-import { exportPdfFromHtml } from "./pdf-export.js";
+import { exportPdfFromHtml, waitForPrintReadyHandshake } from "./pdf-export.js";
 
 /**
  * Result of validating a candidate path before exposing it to a
@@ -782,14 +782,53 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
       preload: preloadPath,
+      sandbox: true,
     },
     width: 1280,
   });
   installWindowChromeCssHook(window);
   showWindowButtons(window);
   attachDownloadSaveAsDialog(window);
+
+  ipcMain.removeHandler('od:print-pdf');
+  ipcMain.handle('od:print-pdf', async (_event, html: unknown, nonce: unknown): Promise<void> => {
+    if (typeof html !== 'string') {
+      throw new Error('Invalid print payload: expected HTML string');
+    }
+    const printNonce = typeof nonce === 'string' ? nonce : '';
+
+    const printWindow = new BrowserWindow({
+      width: 800,
+      height: 600,
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+
+    printWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    printWindow.webContents.on('will-navigate', (e) => e.preventDefault());
+
+    try {
+      await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      await waitForPrintReadyHandshake(printWindow.webContents, printNonce);
+      printWindow.show();
+
+      await new Promise<void>((resolve, reject) => {
+        printWindow.webContents.print({ printBackground: true }, (success: boolean, failureReason?: string) => {
+          if (success) resolve();
+          else if (failureReason === 'Print job canceled') resolve();
+          else reject(new Error(failureReason ?? 'Print failed'));
+        });
+      });
+    } finally {
+      if (!printWindow.isDestroyed()) printWindow.close();
+    }
+  });
+
   let currentUrl: string | null = null;
   let pendingUrl: string | null = null;
   let stopped = false;
