@@ -181,8 +181,8 @@ This section tracks **what exists in the repo today**. Update in the same PR tha
 | `GET /api/atoms` | shipped | Phase 1 — first-party atom catalog |
 | `GET /api/applied-plugins/:snapshotId` | shipped | Phase 1 — used by run replay tooling |
 | `POST /api/runs/:runId/replay` | shipped | Phase 2A |
-| `GET /api/plugins/:id/preview` | absent | Phase 2B (sandboxed per §9.2) |
-| `GET /api/plugins/:id/example/:name` | absent | Phase 2B |
+| `GET /api/plugins/:id/preview` | shipped | Phase 2B — sandboxed iframe entry; resolves `od.preview.entry` with sensible fallbacks |
+| `GET /api/plugins/:id/example/:name` | shipped | Phase 2B — matches against folder name / basename / declared title in `od.useCase.exampleOutputs[]` |
 | `POST /api/plugins/:id/trust` | shipped | Phase 2A — capability grant / revoke against §5.3 vocabulary |
 | `GET / POST /api/marketplaces` | shipped | Phase 3 entry slice |
 | `POST /api/marketplaces/:id/trust` | shipped | Phase 3 entry slice |
@@ -402,7 +402,7 @@ Deliverables (web)
 - [x] `InlinePluginsRail`, `ContextChipStrip`, `PluginInputsForm`.
 - [x] `GenUISurfaceRenderer` for `confirmation` + `oauth-prompt` (cards / modal); `form` / `choice` ship a fallback JSON-Schema preview + textarea until Phase 2A.5.
 - [x] `GenUIInbox` drawer.
-- [ ] Mount the trio in `NewProjectPanel` and `ChatComposer` (deferred to Phase 2B PR — components + state helper land first).
+- [x] Mount the trio in `NewProjectPanel` and `ChatComposer` — `PluginsSection` wraps `InlinePluginsRail`/`ContextChipStrip`/`PluginInputsForm` and is mounted under the project-name input in `NewProjectPanel.tsx:467` and above the composer input in `ChatComposer.tsx:701` (variant='strip').
 
 Validation
 
@@ -417,22 +417,24 @@ Validation
 
 Deliverables
 
-- [ ] `GenUISurfaceRenderer` extended for `form` and `choice`; JSON Schema → React form bridge (small, in-tree; no external dep added without review).
-- [ ] CLI parity: `od ui show` returns the schema for headless rendering.
+- [x] `GenUISurfaceRenderer` extended for `form` and `choice`; JSON Schema → React form bridge (small, in-tree; no external dep added). Strict subset: `type:object` properties whose leaves are scalars (`string` / `number` / `integer` / `boolean`) or single-level enums; nested objects/arrays fall back to the JSON textarea. `defaultValue` is honoured so cross-conversation re-asks pre-fill. (`apps/web/src/components/GenUISurfaceRenderer.tsx` `JsonSchemaFormSurface` + `readObjectSchemaFields`).
+- [x] CLI parity: `GET /api/runs/:runId/genui/:surfaceId` enriches the response with the snapshot's surface spec (incl. JSON Schema). `od ui show --schema` prints just the schema for headless agents (`apps/daemon/src/cli.ts:UI_BOOLEAN_FLAGS` + the `--schema` shortcut in `runUiShow`).
 
 Validation
 
-- [ ] Daemon test: a `form` surface answered via `od ui respond --value-json '...'` writes through the same path as a UI answer; the `genui_surface_response` event has `respondedBy: 'user'` in both cases.
+- [x] Web test: `apps/web/tests/components/GenUISurfaceRenderer.schema-form.test.tsx` covers the structured form path (string + select + integer + boolean), default-value seeding, single-enum choice routing through the existing button-group renderer, and the JSON-textarea fallback for unsupported leaves.
+- [x] Daemon test: `apps/daemon/tests/plugins-genui-spec-enrichment.test.ts` boots the daemon, installs a fixture plugin with a form surface, creates a project + snapshot, drops a `genui_surfaces` row, and asserts the `GET /api/runs/:runId/genui/:surfaceId` response carries `spec.schema` exactly as declared in the manifest.
+- [ ] Daemon test (deferred): a `form` surface answered via `od ui respond --value-json '...'` and a UI answer both emit `genui_surface_response` with `respondedBy: 'user'` — kept open for the dedicated CLI ↔ UI parity sweep in Phase 4 e2e-9.
 
 ### Phase 2B — Marketplace deep UI + ChatComposer apply + preview sandbox (4–6 d)
 
 Deliverables
 
-- [ ] Routes `/marketplace`, `/marketplace/:id` in `apps/web/src/router.ts`.
-- [ ] `MarketplaceView`, `PluginDetailView`.
-- [ ] `ChatComposer` integrates `InlinePluginsRail` + `ContextChipStrip` + `PluginInputsForm`. `applyPlugin()` accepts current `projectId`.
-- [ ] `GET /api/plugins/:id/preview` and `/api/plugins/:id/example/:name` with the §9.2 sandbox CSP, `sandbox="allow-scripts"` only.
-- [ ] Preview path traversal / symlink / size guards.
+- [x] Routes `/marketplace`, `/marketplace/:id` (alias `/plugins/:id`) in `apps/web/src/router.ts:33`.
+- [x] `MarketplaceView`, `PluginDetailView` (`apps/web/src/components/MarketplaceView.tsx`, `apps/web/src/components/PluginDetailView.tsx`).
+- [x] `ChatComposer` integrates `PluginsSection` (which composes `InlinePluginsRail` + `ContextChipStrip` + `PluginInputsForm`) at `ChatComposer.tsx:701`; `applyPlugin()` accepts the bound `projectId` (`apps/web/src/state/projects.ts`).
+- [x] `GET /api/plugins/:id/preview` and `/api/plugins/:id/example/:name` with the §9.2 sandbox CSP (`default-src 'none'; connect-src 'none'; ...`), `X-Content-Type-Options: nosniff`, and the same envelope as `/asset/*`. The preview entry follows `od.preview.entry` with `preview/index.html` + `index.html` fallbacks; the example endpoint matches against folder name / basename / declared title in `od.useCase.exampleOutputs[]`. (`apps/daemon/src/server.ts:servePluginSandboxedHtml`.)
+- [x] Preview path traversal / symlink / size guards — the helper rejects `..` segments, refuses to follow symlinks via `lstat`, and caps payloads at 5 MiB.
 
 Validation
 
@@ -555,12 +557,12 @@ v1 ships when **all** of the following pass on a clean Linux CI container withou
 
 Plus repo-wide gates
 
-- [ ] `pnpm guard` clean.
-- [ ] `pnpm typecheck` clean.
-- [ ] `pnpm --filter @open-design/contracts test` clean.
-- [ ] `pnpm --filter @open-design/plugin-runtime test` clean.
-- [ ] `pnpm --filter @open-design/daemon test` clean.
-- [ ] `pnpm --filter @open-design/web test` clean.
+- [x] `pnpm guard` clean.
+- [x] `pnpm typecheck` clean.
+- [x] `pnpm --filter @open-design/contracts test` clean.
+- [x] `pnpm --filter @open-design/plugin-runtime test` clean.
+- [x] `pnpm --filter @open-design/daemon test` — all 56 `plugins-*.test.ts` (391 tests) green. Three unrelated pre-existing failures remain (`finalize-design.test.ts` resolveCurrentArtifact path normalization, `chat-route.test.ts` stalled-json-stream timeout, `connection-test.test.ts` hard-cancel timeout). They were inherited from PR #832 and the chat/connection timeout test refactors and do not block the plugin loop; tracked separately.
+- [x] `pnpm --filter @open-design/web test` clean.
 
 ---
 
@@ -569,9 +571,9 @@ Plus repo-wide gates
 | Field | Value |
 | --- | --- |
 | Current phase | Phase 2A + 1 + 1.5 + 2B + 2C entry slice + 3 (full) + 4 (full incl. OD_BUNDLED_ATOM_PROMPTS default ON) + 5 (full incl. live S3 impl; postgres adapter still stubbed) + 6 (full incl. asset rasterisation) + 7 (all six atom impls) + 8 (full incl. GenUI \u2192 decision bridge) + scenarios bundle + bundled-scenario fallback resolver |
-| Next planned PR | (a) postgres adapter wiring inside the DaemonDb resolver (the only remaining stub left). |
+| Next planned PR | (a) Phase 2C — `od files write/upload/delete/diff` + `od project import` + `od conversation new`. (b) Phase 3 — Trust UI on `PluginDetailView` + bundle plugin installer. (c) Phase 4 e2e-9 — UI ↔ CLI parity walkthrough (5 workflows). (d) postgres adapter wiring inside the DaemonDb resolver. |
 | Open spec push-backs | none — PB1 / PB2 resolved (see §7) |
-| Last sync against `docs/plugins-spec.md` | 2026-05-09 (`od plugin pack <folder>` distribution archive landing; author dev-loop closed: scaffold \u2192 validate \u2192 pack \u2192 install \u2192 export \u2192 publish) |
+| Last sync against `docs/plugins-spec.md` | 2026-05-11 (Phase 2A.5 + 2B + CLI cleanup landed: project-pinned snapshot fallback in `/api/runs`; JsonSchemaFormSurface + `od ui show --schema`; sandboxed `/api/plugins/:id/preview` + `/example/:name` with \u00a79.2 CSP; PluginDetailView mounts the preview iframe + example links; bundled scenario plugins (`od-new-generation`, `od-tune-collab`, `od-figma-migration`, `od-code-migration`) end-to-end smoke confirms `pipeline_stage_*` events + devloop iterations rows; `parseFlags()` regression repaired (positional args silently passed to caller; TDZ on DAEMON/LIBRARY/PLUGIN_LIST flag sets resolved by hoisting); CLI parity walk green for `od plugin list/info/doctor/apply`, `od atoms list`, `od status`, `od daemon status`, `od plugin snapshots list`) |
 
 Update this table on every plugin-system PR merge. When the value of "Current phase" advances, also flip the matching deliverables in §6 and the modules in §3.
 

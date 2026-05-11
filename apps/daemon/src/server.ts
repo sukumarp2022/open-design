@@ -3779,6 +3779,138 @@ export async function startServer({
   //     declared content type even on miss.
   // The web GenUISurfaceRenderer's SandboxedComponentSurface points
   // its iframe at this URL.
+  // Helper for the /preview + /example/:name routes below. Walks a
+  // list of candidate relpaths inside the plugin folder, picks the
+  // first one that exists + stays inside the fsPath, and serves it
+  // with the §9.2 sandboxed-iframe CSP (same shape as `/asset/*`).
+  // Pulled out so /preview and /example/:name share a single source
+  // of truth for the security envelope.
+  async function servePluginSandboxedHtml(
+    req: any,
+    res: any,
+    pickCandidates: (plugin: any) => Promise<string[]> | string[],
+  ): Promise<void> {
+    try {
+      const plugin = getInstalledPlugin(db, req.params.id);
+      if (!plugin) {
+        res.status(404).json({ error: 'plugin not found' });
+        return;
+      }
+      const candidates = (await pickCandidates(plugin)).filter(
+        (p): p is string => typeof p === 'string' && p.length > 0,
+      );
+      const path = await import('node:path');
+      const fsp = await import('node:fs/promises');
+      const root = path.resolve(plugin.fsPath) + path.sep;
+      let resolved: string | null = null;
+      for (const rel of candidates) {
+        if (rel.includes('..') || rel.startsWith('/') || rel.includes('\0')) continue;
+        const full = path.resolve(plugin.fsPath, rel);
+        if (!(full + path.sep).startsWith(root) && full !== path.resolve(plugin.fsPath)) continue;
+        try {
+          const st = await fsp.stat(full);
+          // Refuse symlinks — the install root may be writable so a
+          // symlink leak would defeat the containment check above.
+          const lst = await fsp.lstat(full);
+          if (lst.isSymbolicLink()) continue;
+          if (!st.isFile()) continue;
+          // 5 MiB cap — preview HTML is human-authored; refuse anything
+          // resembling a binary blob smuggled through this surface.
+          if (st.size > 5 * 1024 * 1024) {
+            res.status(413).json({ error: 'preview asset too large' });
+            return;
+          }
+          resolved = full;
+          break;
+        } catch {
+          // try next candidate
+        }
+      }
+      if (!resolved) {
+        res.status(404).json({ error: 'preview not found' });
+        return;
+      }
+      const buf = await fsp.readFile(resolved);
+      res.setHeader(
+        'Content-Security-Policy',
+        "default-src 'none'; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-ancestors 'self'",
+      );
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      const ext = path.extname(resolved).toLowerCase();
+      const ct =
+        ext === '.html' ? 'text/html; charset=utf-8'
+        : ext === '.js'  ? 'application/javascript; charset=utf-8'
+        : ext === '.css' ? 'text/css; charset=utf-8'
+        : ext === '.json' ? 'application/json; charset=utf-8'
+        : ext === '.svg' ? 'image/svg+xml'
+        : ext === '.png' ? 'image/png'
+        : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+        : 'application/octet-stream';
+      res.setHeader('Content-Type', ct);
+      res.send(buf);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  }
+
+  // Plan §6 Phase 2B + spec §11.6 / §9.2 — plugin preview + examples.
+  //
+  // Two flavours wrap the same sandboxed-HTML envelope as `/asset/*`:
+  //   - `/preview` serves the plugin's preview entry (declared via
+  //     `od.preview.entry`, with fallbacks to `preview/index.html`
+  //     and `index.html`).
+  //   - `/example/:name` serves an entry from `od.useCase.exampleOutputs[]`,
+  //     matched by basename or by index. Both reuse the same
+  //     traversal / containment guards as the asset route.
+  //
+  // The marketplace detail page (PluginDetailView) embeds /preview
+  // inside an `<iframe sandbox="allow-scripts">`. The §9.2 CSP keeps
+  // the preview from reaching back into /api/* even if its scripts
+  // try to fetch.
+  app.get('/api/plugins/:id/preview', async (req, res) => {
+    await servePluginSandboxedHtml(req, res, async (plugin) => {
+      const declared =
+        typeof (plugin as { manifest?: { od?: { preview?: { entry?: unknown } } } }).manifest?.od?.preview?.entry === 'string'
+          ? ((plugin as { manifest: { od: { preview: { entry: string } } } }).manifest.od.preview.entry as string)
+          : null;
+      const candidates = declared
+        ? [declared]
+        : ['preview/index.html', 'index.html'];
+      return candidates;
+    });
+  });
+
+  app.get('/api/plugins/:id/example/:name', async (req, res) => {
+    const name = String(req.params.name ?? '');
+    if (!name || /[\\/\0]|\.\./.test(name)) {
+      return res.status(400).json({ error: 'invalid example name' });
+    }
+    await servePluginSandboxedHtml(req, res, async (plugin) => {
+      const examples = ((plugin as { manifest?: { od?: { useCase?: { exampleOutputs?: Array<{ path?: unknown; title?: unknown }> } } } })
+        .manifest?.od?.useCase?.exampleOutputs ?? []) as Array<{ path?: unknown; title?: unknown }>;
+      const match = examples.find((e) => {
+        if (!e || typeof e.path !== 'string') return false;
+        const segments = e.path.split(/[\\/]/).filter(Boolean);
+        const base = segments[segments.length - 1] ?? '';
+        const baseStem = base.replace(/\.[^.]+$/, '');
+        // For `examples/<folder>/index.html` the conceptual "name"
+        // is the folder, not the inner basename.
+        const parent = segments.length >= 2 ? segments[segments.length - 2] : null;
+        const candidates = [base, baseStem, parent].filter((s): s is string => !!s);
+        if (typeof e.title === 'string') candidates.push(e.title);
+        return candidates.includes(name);
+      });
+      if (match && typeof match.path === 'string') return [match.path];
+      // Allow `examples/<name>/index.html` and `examples/<name>.html`
+      // so plugin authors can ship example folders without enumerating
+      // them in the manifest.
+      return [
+        `examples/${name}/index.html`,
+        `examples/${name}.html`,
+      ];
+    });
+  });
+
   app.get('/api/plugins/:id/asset/*', async (req, res) => {
     try {
       const plugin = getInstalledPlugin(db, req.params.id);
@@ -4289,7 +4421,21 @@ export async function startServer({
       if (!row?.id) return res.status(404).json({ error: 'surface not found' });
       const surface = getSurface(db, row.id);
       if (!surface) return res.status(404).json({ error: 'surface not found' });
-      res.json(surface);
+      // Plan §6 Phase 2A.5 — enrich the response with the surface
+      // spec (incl. schema, prompt, persist tier) pulled out of the
+      // pinned AppliedPluginSnapshot. This is what `od ui show`
+      // returns to headless callers so a code agent can inspect the
+      // JSON Schema before responding via `od ui respond --value-json`.
+      // The store only persists `schemaDigest` (for the cross-conv
+      // cache); the canonical schema lives on the snapshot.
+      let spec = null;
+      if (surface.pluginSnapshotId) {
+        const snap = getSnapshot(db, surface.pluginSnapshotId);
+        if (snap && Array.isArray(snap.genuiSurfaces)) {
+          spec = snap.genuiSurfaces.find((s) => s?.id === surface.surfaceId) ?? null;
+        }
+      }
+      res.json({ ...surface, spec });
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }

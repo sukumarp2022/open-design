@@ -224,9 +224,33 @@ export function GenUISurfaceRenderer(props: Props) {
     );
   }
 
-  // form / choice fallback — Phase 2A.5 lands the JSON-Schema-driven
-  // renderer; until then a value-json textarea is the headless-equivalent
-  // surface a power user can edit by hand.
+  // Plan §6 Phase 2A.5 — JSON Schema driven renderer for `form` and
+  // generic `choice` surfaces. We support the strict subset that
+  // matches what plugin authors actually declare today (object schemas
+  // whose top-level properties are scalars or single-level enums); any
+  // schema that strays outside the bridge falls back to the
+  // `FreeFormJsonForm` textarea so a power user can still answer it.
+  // The default value seeded from `pending.defaultValue` is honoured
+  // so re-asks (Phase 2A cross-conversation cache) prefill.
+  if (surface.kind === 'form' || surface.kind === 'choice') {
+    const fields = readObjectSchemaFields(surface.schema);
+    if (fields) {
+      return (
+        <JsonSchemaFormSurface
+          surface={surface}
+          fields={fields}
+          defaultValue={asRecord(props.pending.defaultValue)}
+          onAnswered={submit}
+          disabled={submitting}
+          error={error}
+          {...(props.onSkip ? { onSkip: props.onSkip } : {})}
+        />
+      );
+    }
+  }
+
+  // Anything else (multi-property choices without enums, free-form
+  // `form` without schema, unknown kinds) drops to the JSON textarea.
   return (
     <div className="genui-surface genui-surface--fallback" role="dialog" aria-label={surface.id}>
       <div className="genui-surface__prompt">
@@ -242,6 +266,11 @@ export function GenUISurfaceRenderer(props: Props) {
       {error ? <div className="genui-surface__error">{error}</div> : null}
     </div>
   );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
 }
 
 // Plan §3.Q1 — diff-review native UI.
@@ -482,6 +511,306 @@ function pickPrimaryEnum(schema: unknown): { key: string; enum: string[] } | nul
 function asStringArray(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   return input.filter((s): s is string => typeof s === 'string');
+}
+
+// Plan §6 Phase 2A.5 — JSON Schema → React form bridge.
+//
+// Reads the strict subset of JSON Schema we expect from plugin
+// authors: an object schema whose top-level properties are scalars
+// (`string` / `number` / `integer` / `boolean`) or single-level
+// `enum` strings. Returns `null` for anything else so the caller can
+// fall back to the free-form JSON textarea. We deliberately keep the
+// bridge small and in-tree — no react-jsonschema-form / @rjsf — so
+// the dependency surface stays minimal.
+type FieldSpec =
+  | { key: string; kind: 'string'; label: string; required: boolean; description?: string; multiline?: boolean; format?: string }
+  | { key: string; kind: 'number'; label: string; required: boolean; description?: string; integer: boolean; minimum?: number; maximum?: number }
+  | { key: string; kind: 'boolean'; label: string; required: boolean; description?: string }
+  | { key: string; kind: 'enum'; label: string; required: boolean; description?: string; options: string[] };
+
+function readObjectSchemaFields(schema: unknown): FieldSpec[] | null {
+  if (!schema || typeof schema !== 'object') return null;
+  const obj = schema as { type?: unknown; properties?: unknown; required?: unknown };
+  if (obj.type !== undefined && obj.type !== 'object') return null;
+  const properties = obj.properties;
+  if (!properties || typeof properties !== 'object') return null;
+  const required = new Set<string>(
+    Array.isArray(obj.required)
+      ? obj.required.filter((r): r is string => typeof r === 'string')
+      : [],
+  );
+  const fields: FieldSpec[] = [];
+  for (const [key, raw] of Object.entries(properties as Record<string, unknown>)) {
+    if (!raw || typeof raw !== 'object') return null;
+    const prop = raw as {
+      type?: unknown;
+      enum?: unknown;
+      title?: unknown;
+      description?: unknown;
+      minimum?: unknown;
+      maximum?: unknown;
+      format?: unknown;
+      maxLength?: unknown;
+    };
+    const label = typeof prop.title === 'string' && prop.title ? prop.title : key;
+    const description = typeof prop.description === 'string' ? prop.description : undefined;
+    if (Array.isArray(prop.enum)) {
+      const options = prop.enum.filter((v): v is string => typeof v === 'string');
+      if (options.length === 0) return null;
+      fields.push({ key, kind: 'enum', label, required: required.has(key), options, ...(description ? { description } : {}) });
+      continue;
+    }
+    if (prop.type === 'string') {
+      const format = typeof prop.format === 'string' ? prop.format : undefined;
+      const multiline = typeof prop.maxLength === 'number' && prop.maxLength > 200;
+      fields.push({
+        key,
+        kind: 'string',
+        label,
+        required: required.has(key),
+        ...(description ? { description } : {}),
+        ...(format ? { format } : {}),
+        ...(multiline ? { multiline } : {}),
+      });
+      continue;
+    }
+    if (prop.type === 'integer' || prop.type === 'number') {
+      fields.push({
+        key,
+        kind: 'number',
+        label,
+        required: required.has(key),
+        integer: prop.type === 'integer',
+        ...(description ? { description } : {}),
+        ...(typeof prop.minimum === 'number' ? { minimum: prop.minimum } : {}),
+        ...(typeof prop.maximum === 'number' ? { maximum: prop.maximum } : {}),
+      });
+      continue;
+    }
+    if (prop.type === 'boolean') {
+      fields.push({
+        key,
+        kind: 'boolean',
+        label,
+        required: required.has(key),
+        ...(description ? { description } : {}),
+      });
+      continue;
+    }
+    // Unsupported leaf (object / array / null / multi-type) — let the
+    // caller fall back to the JSON textarea rather than rendering a
+    // half-broken control.
+    return null;
+  }
+  return fields.length > 0 ? fields : null;
+}
+
+function JsonSchemaFormSurface(props: {
+  surface: GenUISurfaceSpec;
+  fields: FieldSpec[];
+  defaultValue: Record<string, unknown>;
+  onAnswered: (value: unknown) => void | Promise<void>;
+  disabled: boolean;
+  error: string | null;
+  onSkip?: () => void;
+}) {
+  const { fields, defaultValue } = props;
+  const [values, setValues] = useState<Record<string, unknown>>(() => {
+    const seed: Record<string, unknown> = {};
+    for (const f of fields) {
+      const provided = Object.prototype.hasOwnProperty.call(defaultValue, f.key)
+        ? defaultValue[f.key]
+        : undefined;
+      if (provided !== undefined) {
+        seed[f.key] = provided;
+        continue;
+      }
+      if (f.kind === 'boolean') seed[f.key] = false;
+      else if (f.kind === 'enum') seed[f.key] = f.options[0];
+      else seed[f.key] = '';
+    }
+    return seed;
+  });
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    const out: Record<string, unknown> = {};
+    for (const f of fields) {
+      const raw = values[f.key];
+      if (f.kind === 'number') {
+        if (raw === '' || raw === null || raw === undefined) {
+          if (f.required) {
+            setLocalError(`${f.label} is required.`);
+            return;
+          }
+          continue;
+        }
+        const n = typeof raw === 'number' ? raw : Number(raw);
+        if (!Number.isFinite(n)) {
+          setLocalError(`${f.label} must be a number.`);
+          return;
+        }
+        if (f.integer && !Number.isInteger(n)) {
+          setLocalError(`${f.label} must be a whole number.`);
+          return;
+        }
+        if (typeof f.minimum === 'number' && n < f.minimum) {
+          setLocalError(`${f.label} must be ≥ ${f.minimum}.`);
+          return;
+        }
+        if (typeof f.maximum === 'number' && n > f.maximum) {
+          setLocalError(`${f.label} must be ≤ ${f.maximum}.`);
+          return;
+        }
+        out[f.key] = n;
+        continue;
+      }
+      if (f.kind === 'boolean') {
+        out[f.key] = Boolean(raw);
+        continue;
+      }
+      const str = typeof raw === 'string' ? raw : raw == null ? '' : String(raw);
+      if (str.length === 0) {
+        if (f.required) {
+          setLocalError(`${f.label} is required.`);
+          return;
+        }
+        continue;
+      }
+      out[f.key] = str;
+    }
+    void props.onAnswered(out);
+  };
+
+  const setField = (key: string, value: unknown) => {
+    setValues((s) => ({ ...s, [key]: value }));
+  };
+
+  return (
+    <form
+      className={`genui-surface genui-surface--${props.surface.kind}`}
+      role="dialog"
+      aria-label={props.surface.id}
+      onSubmit={submit}
+    >
+      <div className="genui-surface__prompt">
+        {props.surface.prompt ?? `Plugin needs ${props.surface.kind} input.`}
+      </div>
+      <div className="genui-surface__fields">
+        {fields.map((f) => (
+          <label key={f.key} className="genui-surface__field" data-testid={`genui-field-${f.key}`}>
+            <span className="genui-surface__field-label">
+              {f.label}
+              {f.required ? <span className="genui-surface__field-required" aria-hidden="true">*</span> : null}
+            </span>
+            {renderFieldControl(f, values[f.key], (v) => setField(f.key, v))}
+            {f.kind !== 'boolean' && f.description ? (
+              <span className="genui-surface__field-help">{f.description}</span>
+            ) : null}
+          </label>
+        ))}
+      </div>
+      {localError ? <div className="genui-surface__error">{localError}</div> : null}
+      {props.error ? <div className="genui-surface__error">{props.error}</div> : null}
+      <div className="genui-surface__actions">
+        <button
+          type="submit"
+          className="genui-surface__primary"
+          disabled={props.disabled}
+          data-testid="genui-form-submit"
+        >
+          Submit
+        </button>
+        {props.onSkip ? (
+          <button
+            type="button"
+            className="genui-surface__secondary"
+            disabled={props.disabled}
+            onClick={props.onSkip}
+          >
+            Skip
+          </button>
+        ) : null}
+      </div>
+    </form>
+  );
+}
+
+function renderFieldControl(
+  field: FieldSpec,
+  value: unknown,
+  onChange: (value: unknown) => void,
+) {
+  const testId = `genui-field-control-${field.key}`;
+  if (field.kind === 'enum') {
+    return (
+      <select
+        className="genui-surface__select"
+        value={typeof value === 'string' ? value : (field.options[0] ?? '')}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid={testId}
+      >
+        {field.options.map((opt) => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+    );
+  }
+  if (field.kind === 'boolean') {
+    return (
+      <input
+        type="checkbox"
+        className="genui-surface__checkbox"
+        checked={Boolean(value)}
+        onChange={(e) => onChange(e.target.checked)}
+        data-testid={testId}
+      />
+    );
+  }
+  if (field.kind === 'number') {
+    return (
+      <input
+        type="number"
+        className="genui-surface__input"
+        value={typeof value === 'number' ? value : typeof value === 'string' ? value : ''}
+        step={field.integer ? 1 : 'any'}
+        {...(typeof field.minimum === 'number' ? { min: field.minimum } : {})}
+        {...(typeof field.maximum === 'number' ? { max: field.maximum } : {})}
+        onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+        data-testid={testId}
+      />
+    );
+  }
+  // string
+  if (field.multiline) {
+    return (
+      <textarea
+        className="genui-surface__textarea"
+        rows={4}
+        value={typeof value === 'string' ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid={testId}
+      />
+    );
+  }
+  const inputType =
+    field.format === 'email' ? 'email'
+    : field.format === 'date' ? 'date'
+    : field.format === 'time' ? 'time'
+    : field.format === 'date-time' ? 'datetime-local'
+    : field.format === 'uri' || field.format === 'url' ? 'url'
+    : 'text';
+  return (
+    <input
+      type={inputType}
+      className="genui-surface__input"
+      value={typeof value === 'string' ? value : ''}
+      onChange={(e) => onChange(e.target.value)}
+      data-testid={testId}
+    />
+  );
 }
 
 function FreeFormJsonForm({

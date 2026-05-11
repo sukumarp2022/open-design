@@ -94,6 +94,23 @@ export interface ResolveSnapshotError {
 
 export type ResolveSnapshotResult = ResolveSnapshotOk | ResolveSnapshotError | null;
 
+// Read the snapshot id that's currently pinned on a project row (if any).
+// Returns null when the project is missing or has no snapshot pinned.
+// Used by resolvePluginSnapshot's fallback so a plain `POST /api/runs
+// { projectId }` reuses the snapshot the user picked at project create
+// time — without forcing every caller to re-thread the snapshot id.
+function readProjectPinnedSnapshotId(db: SqliteDb, projectId: string): string | null {
+  try {
+    const row = db
+      .prepare(`SELECT applied_plugin_snapshot_id AS id FROM projects WHERE id = ?`)
+      .get(projectId) as { id?: string | null } | undefined;
+    const id = row?.id;
+    return typeof id === 'string' && id.length > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 // Pull plugin-bearing fields off the request body without mutating it.
 function pickPluginFields(body: Record<string, unknown> | null | undefined) {
   if (!body || typeof body !== 'object') return {};
@@ -116,6 +133,17 @@ function pickPluginFields(body: Record<string, unknown> | null | undefined) {
 
 export function resolvePluginSnapshot(input: ResolveSnapshotInput): ResolveSnapshotResult {
   const fields = pickPluginFields(input.body);
+  // If the caller didn't name a plugin / snapshot in the body but a
+  // snapshot is already pinned to the project (set by a prior project /
+  // conversation create that ran the plugin), reuse it. This is what
+  // makes ChatComposer's "start a run" path work after the user picked a
+  // plugin in NewProjectPanel — the body only carries `projectId`.
+  if (!fields.pluginId && !fields.snapshotId && input.projectId) {
+    const pinned = readProjectPinnedSnapshotId(input.db, input.projectId);
+    if (pinned) {
+      fields.snapshotId = pinned;
+    }
+  }
   if (!fields.pluginId && !fields.snapshotId) return null;
 
   // Path 1: explicit snapshot id — look it up and verify status.

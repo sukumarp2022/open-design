@@ -105,6 +105,36 @@ const UI_BOOLEAN_FLAGS = new Set([
   'h',
   'json',
   'skip',
+  // Plan §6 Phase 2A.5 — `od ui show --schema` returns just the
+  // surface's JSON Schema (or `null` when the surface declares
+  // none). Lets a code agent inspect the contract before piping a
+  // value back through `od ui respond --value-json`.
+  'schema',
+]);
+
+// Hoist flag set bindings consumed by handlers reachable through
+// the top-of-file dispatcher. The dispatch block runs synchronously
+// during module load; any const declared further down the file is
+// still in TDZ when the handler executes, so `od status` /
+// `od atoms list` / etc. would crash with `Cannot access X before
+// initialization`. The actual definitions stay further down (next
+// to their handlers); we just export the bindings up here so the
+// dispatch path always sees an initialized value.
+const DAEMON_STRING_FLAGS = new Set([
+  'daemon-url', 'port', 'host', 'namespace',
+]);
+const DAEMON_BOOLEAN_FLAGS = new Set([
+  'help', 'h', 'json', 'headless', 'serve-web', 'no-open',
+]);
+const LIBRARY_STRING_FLAGS = new Set(['daemon-url', 'query', 'tag']);
+const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+const PLUGIN_LIST_FILTER_FLAGS = new Set([
+  ...PLUGIN_STRING_FLAGS,
+  'task-kind', 'mode', 'tag', 'trust',
+]);
+const PLUGIN_LIST_BOOLEAN_FLAGS = new Set([
+  ...PLUGIN_BOOLEAN_FLAGS,
+  'bundled', 'no-bundled',
 ]);
 
 const SUBCOMMAND_MAP = {
@@ -616,11 +646,17 @@ function parseFlags(argv, opts = {}) {
   const stringFlags = opts.string instanceof Set ? opts.string : new Set();
   const booleanFlags = opts.boolean instanceof Set ? opts.boolean : new Set();
   const knownFlags = new Set([...stringFlags, ...booleanFlags]);
+  // Positionals collected silently; callers that take `<id>` style
+  // positional args (e.g. `od plugin info <id>`) re-scan `argv`
+  // themselves to pick them up. Strict positional rejection here
+  // would break those commands, so we only enforce strict-flag
+  // semantics for things that *are* prefixed with `--`.
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a || !a.startsWith('--')) {
-      throw new Error(`unexpected positional argument: ${a}`);
+      // Positional — let the caller decide what to do with it.
+      continue;
     }
     const eq = a.indexOf('=');
     const key = eq >= 0 ? a.slice(2, eq) : a.slice(2);
@@ -1486,15 +1522,6 @@ function pluginDaemonUrl(flags) {
 // Plan §3.Y1 — filter knobs on `od plugin list` (and feeds
 // `od plugin search` below). Recognising these as string flags
 // keeps the parseFlags() argv consumer happy.
-const PLUGIN_LIST_FILTER_FLAGS = new Set([
-  ...PLUGIN_STRING_FLAGS,
-  'task-kind', 'mode', 'tag', 'trust',
-]);
-const PLUGIN_LIST_BOOLEAN_FLAGS = new Set([
-  ...PLUGIN_BOOLEAN_FLAGS,
-  'bundled', 'no-bundled',
-]);
-
 async function runPluginList(rest) {
   const flags = parseFlags(rest, {
     string:  PLUGIN_LIST_FILTER_FLAGS,
@@ -2916,6 +2943,14 @@ async function runUiShow(rest) {
     process.exit(1);
   }
   const data = await resp.json();
+  // Plan §6 Phase 2A.5 — `--schema` prints the spec's JSON Schema
+  // only (null if the surface declares none). Designed to feed
+  // `od ui respond --value-json "$(...)"` in headless / agent flows.
+  if (flags.schema) {
+    const schema = data?.spec?.schema ?? null;
+    process.stdout.write(JSON.stringify(schema, null, 2) + '\n');
+    return;
+  }
   process.stdout.write(JSON.stringify(data, null, 2) + '\n');
 }
 
@@ -3057,7 +3092,7 @@ function printUiHelp() {
   console.log(`Usage:
   od ui list  --run <runId>                          List GenUI surfaces for a run.
   od ui list  --project <projectId>                  List GenUI surfaces for a project.
-  od ui show  --run <runId> <surfaceId>              Read a single surface (kind / schema / value).
+  od ui show  --run <runId> <surfaceId> [--schema]   Read a single surface (kind / schema / value). --schema prints just the JSON Schema.
   od ui respond --run <runId> <surfaceId> [--value <txt> | --value-json <json> | --skip]
                                                      Answer a pending surface from any process.
   od ui revoke --project <projectId> <surfaceId>     Invalidate a project-tier cached answer.
@@ -3606,13 +3641,6 @@ Common options:
 // `od daemon stop   [--daemon-url <url>]`         calls POST /api/daemon/shutdown.
 // ---------------------------------------------------------------------------
 
-const DAEMON_STRING_FLAGS = new Set([
-  'daemon-url', 'port', 'host', 'namespace',
-]);
-const DAEMON_BOOLEAN_FLAGS = new Set([
-  'help', 'h', 'json', 'headless', 'serve-web', 'no-open',
-]);
-
 async function runDaemon(args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
@@ -3846,9 +3874,6 @@ async function runDaemonStop(flags) {
 function libraryDaemonUrl(flags) {
   return (flags && flags['daemon-url']) || process.env.OD_DAEMON_URL || 'http://127.0.0.1:7456';
 }
-
-const LIBRARY_STRING_FLAGS = new Set(['daemon-url', 'query', 'tag']);
-const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 
 async function runAtoms(args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {

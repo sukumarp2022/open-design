@@ -300,6 +300,48 @@ describe('Plan §8 e2e — daemon-side anchors', () => {
     expect(cwdEntries.some((e) => e === '.mcp.json')).toBe(false);
   });
 
+  it('reuses the project-pinned snapshot when /api/runs body has no pluginId or snapshotId', async () => {
+    // Setup: install sample-plugin, create a project row, run the
+    // resolver with a body that names pluginId+inputs (project-create
+    // path). The resolver pins the snapshot via linkSnapshotToProject.
+    await installLocal(FIXTURE_DIR);
+    db.prepare(`INSERT INTO projects (id, name) VALUES (?, ?)`).run(
+      'project-pinned',
+      'pinned project',
+    );
+
+    const created = resolvePluginSnapshot({
+      db,
+      body: { pluginId: 'sample-plugin', pluginInputs: { topic: 'demo' } },
+      projectId: 'project-pinned',
+      registry: REGISTRY_VIEW,
+    });
+    expect(created?.ok).toBe(true);
+    const pinnedSnapshotId = created!.ok ? created!.snapshotId : '';
+    expect(pinnedSnapshotId.length).toBeGreaterThan(0);
+
+    // The project row now carries the snapshot id.
+    const projectRow = db
+      .prepare(`SELECT applied_plugin_snapshot_id AS id FROM projects WHERE id = ?`)
+      .get('project-pinned') as { id: string };
+    expect(projectRow.id).toBe(pinnedSnapshotId);
+
+    // Now simulate the run-create call: body has only `projectId`. The
+    // resolver should fall back to the project-pinned snapshot id and
+    // return ok with the same snapshotId — no missing-input gate fires.
+    const reused = resolvePluginSnapshot({
+      db,
+      body: { projectId: 'project-pinned' },
+      projectId: 'project-pinned',
+      registry: REGISTRY_VIEW,
+    });
+    expect(reused?.ok).toBe(true);
+    if (reused?.ok) {
+      expect(reused.snapshotId).toBe(pinnedSnapshotId);
+      expect(reused.created).toBe(false);
+    }
+  });
+
   it('capabilitiesRequiredError envelope shape stays stable for code agents', () => {
     const err = capabilitiesRequiredError({
       pluginId: 'sample',

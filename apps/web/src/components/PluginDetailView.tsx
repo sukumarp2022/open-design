@@ -66,6 +66,16 @@ export function PluginDetailView(props: Props) {
   const required = od.connectors?.required ?? [];
   const optional = od.connectors?.optional ?? [];
   const capabilities = od.capabilities ?? [];
+  // Plan §6 Phase 2B / spec §11.6 — show a sandboxed iframe of the
+  // plugin's preview entry when one is declared. The daemon serves
+  // it under `/api/plugins/:id/preview` with the §9.2 CSP +
+  // sandbox="allow-scripts" envelope; we only hint here that a
+  // preview is available.
+  const hasPreview = typeof od.preview?.entry === 'string' && od.preview.entry.length > 0;
+  const examples = (od.useCase?.exampleOutputs ?? []) as Array<{
+    path: string;
+    title?: string;
+  }>;
 
   const onUse = async () => {
     setApplying(true);
@@ -151,6 +161,56 @@ export function PluginDetailView(props: Props) {
               </ul>
             </>
           ) : null}
+        </section>
+      ) : null}
+
+      {hasPreview ? (
+        <section className="plugin-detail__preview" data-testid="plugin-detail-preview-section">
+          <h2>Preview</h2>
+          <iframe
+            title={`${plugin.title} preview`}
+            src={`/api/plugins/${encodeURIComponent(plugin.id)}/preview`}
+            sandbox="allow-scripts"
+            className="plugin-detail__preview-frame"
+            data-testid="plugin-detail-preview-iframe"
+            style={{
+              width: '100%',
+              minHeight: 360,
+              border: '1px solid var(--od-border, #ddd)',
+              borderRadius: 6,
+              background: '#fff',
+            }}
+          />
+        </section>
+      ) : null}
+
+      {examples.length > 0 ? (
+        <section className="plugin-detail__examples" data-testid="plugin-detail-examples-section">
+          <h2>Examples</h2>
+          <ul>
+            {examples.map((e, idx) => {
+              const base = e.path.split(/[\\/]/).filter(Boolean).pop() ?? `${idx}`;
+              const stem = base.replace(/\.[^.]+$/, '');
+              const name = e.title ?? stem;
+              return (
+                <li key={`${e.path}-${idx}`}>
+                  <a
+                    href={`/api/plugins/${encodeURIComponent(plugin.id)}/example/${encodeURIComponent(stem)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    data-testid={`plugin-detail-example-${stem}`}
+                  >
+                    {name}
+                  </a>
+                  {e.title && e.title !== stem ? (
+                    <span style={{ marginLeft: '0.5em', color: 'var(--od-muted, #888)' }}>
+                      <code>{stem}</code>
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         </section>
       ) : null}
 
