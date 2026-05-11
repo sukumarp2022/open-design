@@ -263,7 +263,11 @@ function applyConfigValue(
     }
   }
   if (key === 'customInstructions') {
-    if (typeof value === 'string' || value === null) target[key] = value;
+    if (typeof value === 'string') {
+      target[key] = value.slice(0, 5000);
+    } else if (value === null) {
+      target[key] = value;
+    }
     return;
   }
 }

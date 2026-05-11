@@ -337,6 +337,11 @@ export function ProjectView({
   const [workspaceFocused, setWorkspaceFocused] = useState(false);
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [instructionsDraft, setInstructionsDraft] = useState(project.customInstructions ?? '');
+  // Keep the draft in sync with the server value when the editor is closed
+  // (e.g. after an external update or project switch).
+  useEffect(() => {
+    if (!instructionsOpen) setInstructionsDraft(project.customInstructions ?? '');
+  }, [project.customInstructions, instructionsOpen]);
   // PR #974 round 7 (mrcfps @ useDesignMdState.ts:131): counter that
   // bumps on file-changed SSE events, live_artifact* events, and the
   // chat streaming-completion edge so the staleness chip stays in sync
@@ -2396,7 +2401,10 @@ export function ProjectView({
               type="button"
               className="project-instructions-toggle"
               title={t('project.customInstructions')}
-              onClick={() => setInstructionsOpen((v) => !v)}
+              onClick={() => {
+                if (instructionsOpen) setInstructionsDraft(project.customInstructions ?? '');
+                setInstructionsOpen((v) => !v);
+              }}
             >
               <Icon name="edit" size={13} />
             </button>
@@ -2446,13 +2454,17 @@ export function ProjectView({
           <textarea
             className="project-instructions-input"
             rows={3}
+            maxLength={5000}
             placeholder={t('project.customInstructionsPlaceholder')}
             value={instructionsDraft}
             onChange={(e) => setInstructionsDraft(e.target.value)}
             autoFocus
           />
           <div className="project-instructions-actions">
-            <button type="button" className="btn-sm" onClick={() => setInstructionsOpen(false)}>
+            <button type="button" className="btn-sm" onClick={() => {
+              setInstructionsDraft(project.customInstructions ?? '');
+              setInstructionsOpen(false);
+            }}>
               {t('common.cancel')}
             </button>
             <button type="button" className="btn-sm btn-primary" onClick={handleSaveInstructions}>

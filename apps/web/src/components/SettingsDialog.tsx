@@ -2495,6 +2495,7 @@ export function SettingsDialog({
                 <textarea
                   className="custom-instructions-input"
                   rows={5}
+                  maxLength={5000}
                   placeholder={t('settings.customInstructionsPlaceholder')}
                   value={cfg.customInstructions ?? ''}
                   onChange={(e) => setCfg({ ...cfg, customInstructions: e.target.value || undefined })}
