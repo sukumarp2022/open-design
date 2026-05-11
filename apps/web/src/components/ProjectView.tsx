@@ -2029,15 +2029,10 @@ export function ProjectView({
       return;
     }
     setInstructionsSaving(true);
-    const updated: Project = { ...project, customInstructions: value, updatedAt: Date.now() };
-    onProjectChange(updated);
     const result = await patchProject(project.id, { customInstructions: value ?? null });
     setInstructionsSaving(false);
-    if (!result) {
-      // Revert optimistic update on failure.
-      onProjectChange(project);
-      return;
-    }
+    if (!result) return;
+    onProjectChange(result);
     setInstructionsOpen(false);
   }, [project, onProjectChange, instructionsDraft]);
 
