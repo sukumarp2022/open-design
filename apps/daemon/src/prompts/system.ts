@@ -222,13 +222,13 @@ export function composeSystemPrompt({
 
   if (userInstructions && userInstructions.trim().length > 0) {
     parts.push(
-      `\n\n## Custom instructions (user-level)\n\nThe user has set the following persistent instructions. Apply them to every project unless a project-level instruction explicitly overrides a specific point.\n\n${userInstructions.trim()}`,
+      `\n\n## Custom instructions (user-level)\n\nThe user has set the following persistent instructions. Apply them as defaults to every project. When a project-level instruction below contradicts a point here, the project-level version wins.\n\n${userInstructions.trim()}`,
     );
   }
 
   if (projectInstructions && projectInstructions.trim().length > 0) {
     parts.push(
-      `\n\n## Custom instructions (project-level)\n\nThe user has set the following instructions for this specific project. They take precedence over user-level custom instructions when both address the same topic.\n\n${projectInstructions.trim()}`,
+      `\n\n## Custom instructions (project-level)\n\nThe user has set the following instructions for this specific project. They take precedence over user-level custom instructions whenever both address the same topic (e.g. if user-level says "use spaces" but project-level says "use tabs", use tabs).\n\n${projectInstructions.trim()}`,
     );
   }
 

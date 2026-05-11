@@ -337,6 +337,7 @@ export function ProjectView({
   const [workspaceFocused, setWorkspaceFocused] = useState(false);
   const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [instructionsDraft, setInstructionsDraft] = useState(project.customInstructions ?? '');
+  const [instructionsSaving, setInstructionsSaving] = useState(false);
   // Keep the draft in sync with the server value when the editor is closed
   // (e.g. after an external update or project switch).
   useEffect(() => {
@@ -2021,15 +2022,22 @@ export function ProjectView({
     [project, onProjectChange],
   );
 
-  const handleSaveInstructions = useCallback(() => {
+  const handleSaveInstructions = useCallback(async () => {
     const value = instructionsDraft.trim() || undefined;
     if (value === (project.customInstructions ?? undefined)) {
       setInstructionsOpen(false);
       return;
     }
+    setInstructionsSaving(true);
     const updated: Project = { ...project, customInstructions: value, updatedAt: Date.now() };
     onProjectChange(updated);
-    void patchProject(project.id, { customInstructions: value ?? null });
+    const result = await patchProject(project.id, { customInstructions: value ?? null });
+    setInstructionsSaving(false);
+    if (!result) {
+      // Revert optimistic update on failure.
+      onProjectChange(project);
+      return;
+    }
     setInstructionsOpen(false);
   }, [project, onProjectChange, instructionsDraft]);
 
@@ -2458,16 +2466,17 @@ export function ProjectView({
             placeholder={t('project.customInstructionsPlaceholder')}
             value={instructionsDraft}
             onChange={(e) => setInstructionsDraft(e.target.value)}
+            disabled={instructionsSaving}
             autoFocus
           />
           <div className="project-instructions-actions">
-            <button type="button" className="btn-sm" onClick={() => {
+            <button type="button" className="btn-sm" disabled={instructionsSaving} onClick={() => {
               setInstructionsDraft(project.customInstructions ?? '');
               setInstructionsOpen(false);
             }}>
               {t('common.cancel')}
             </button>
-            <button type="button" className="btn-sm btn-primary" onClick={handleSaveInstructions}>
+            <button type="button" className="btn-sm btn-primary" disabled={instructionsSaving} onClick={handleSaveInstructions}>
               {t('common.save')}
             </button>
           </div>
