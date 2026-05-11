@@ -96,6 +96,7 @@ import { AvatarMenu } from './AvatarMenu';
 import { ChatPane } from './ChatPane';
 import { decideAutoOpenAfterWrite } from './auto-open-file';
 import { FileWorkspace } from './FileWorkspace';
+import { Icon } from './Icon';
 import { CenteredLoader } from './Loading';
 import { Toast } from './Toast';
 import { useDesignMdState } from '../hooks/useDesignMdState';
@@ -334,6 +335,8 @@ export function ProjectView({
   const [liveArtifacts, setLiveArtifacts] = useState<LiveArtifactSummary[]>([]);
   const [liveArtifactEvents, setLiveArtifactEvents] = useState<LiveArtifactEventItem[]>([]);
   const [workspaceFocused, setWorkspaceFocused] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
+  const [instructionsDraft, setInstructionsDraft] = useState(project.customInstructions ?? '');
   // PR #974 round 7 (mrcfps @ useDesignMdState.ts:131): counter that
   // bumps on file-changed SSE events, live_artifact* events, and the
   // chat streaming-completion edge so the staleness chip stays in sync
@@ -863,15 +866,19 @@ export function ProjectView({
       metadata: project.metadata,
       template,
       streamFormat: config.mode === 'api' ? 'plain' : undefined,
+      userInstructions: config.customInstructions,
+      projectInstructions: project.customInstructions,
     });
   }, [
     project.skillId,
     project.designSystemId,
     project.metadata,
+    project.customInstructions,
     skills,
     designTemplates,
     designSystems,
     config.mode,
+    config.customInstructions,
   ]);
 
   const persistMessage = useCallback(
@@ -2009,6 +2016,18 @@ export function ProjectView({
     [project, onProjectChange],
   );
 
+  const handleSaveInstructions = useCallback(() => {
+    const value = instructionsDraft.trim() || undefined;
+    if (value === (project.customInstructions ?? undefined)) {
+      setInstructionsOpen(false);
+      return;
+    }
+    const updated: Project = { ...project, customInstructions: value, updatedAt: Date.now() };
+    onProjectChange(updated);
+    void patchProject(project.id, { customInstructions: value ?? null });
+    setInstructionsOpen(false);
+  }, [project, onProjectChange, instructionsDraft]);
+
   const projectMeta = useMemo(() => {
     const summary =
       skills.find((s) => s.id === project.skillId) ??
@@ -2373,6 +2392,14 @@ export function ProjectView({
               {project.name}
             </span>
             <span className="meta" data-testid="project-meta">{projectMeta}</span>
+            <button
+              type="button"
+              className="project-instructions-toggle"
+              title={t('project.customInstructions')}
+              onClick={() => setInstructionsOpen((v) => !v)}
+            >
+              <Icon name="edit" size={13} />
+            </button>
           </span>
           {targetPlatforms.length > 0 ? (
             <span
@@ -2413,6 +2440,27 @@ export function ProjectView({
           ) : null}
         </div>
       </AppChromeHeader>
+      {instructionsOpen && (
+        <div className="project-instructions-bar">
+          <label className="project-instructions-label">{t('project.customInstructions')}</label>
+          <textarea
+            className="project-instructions-input"
+            rows={3}
+            placeholder={t('project.customInstructionsPlaceholder')}
+            value={instructionsDraft}
+            onChange={(e) => setInstructionsDraft(e.target.value)}
+            autoFocus
+          />
+          <div className="project-instructions-actions">
+            <button type="button" className="btn-sm" onClick={() => setInstructionsOpen(false)}>
+              {t('common.cancel')}
+            </button>
+            <button type="button" className="btn-sm btn-primary" onClick={handleSaveInstructions}>
+              {t('common.save')}
+            </button>
+          </div>
+        </div>
+      )}
       <div
         ref={splitRef}
         className={[
