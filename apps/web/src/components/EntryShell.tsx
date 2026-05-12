@@ -325,6 +325,7 @@ export function EntryShell({
       ...(payload.appliedPluginSnapshotId
         ? { appliedPluginSnapshotId: payload.appliedPluginSnapshotId }
         : {}),
+      ...(payload.pluginInputs ? { pluginInputs: payload.pluginInputs } : {}),
       autoSendFirstMessage: true,
     });
   }

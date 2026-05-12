@@ -201,6 +201,16 @@ describe('HomeView prompt handoff', () => {
       '/api/plugins/od-new-generation/apply',
       expect.anything(),
     ));
+    const applyCall = fetchMock.mock.calls.find(([url]) => (
+      typeof url === 'string' && url.includes('/api/plugins/od-new-generation/apply')
+    ));
+    expect(JSON.parse(String((applyCall?.[1] as RequestInit).body))).toMatchObject({
+      inputs: {
+        artifactKind: 'Open Design plugin',
+        audience: 'Open Design plugin authors',
+        topic: 'packaging a reusable workflow as an Open Design plugin',
+      },
+    });
     await waitFor(() => {
       expect((screen.getByTestId('home-hero-input') as HTMLTextAreaElement).value)
         .toBe(PLUGIN_AUTHORING_PROMPT);
@@ -213,6 +223,11 @@ describe('HomeView prompt handoff', () => {
       prompt: PLUGIN_AUTHORING_PROMPT,
       pluginId: 'od-new-generation',
       appliedPluginSnapshotId: 'snap-default',
+      pluginInputs: {
+        artifactKind: 'Open Design plugin',
+        audience: 'Open Design plugin authors',
+        topic: 'packaging a reusable workflow as an Open Design plugin',
+      },
       projectKind: 'other',
     }));
   });
@@ -260,6 +275,7 @@ describe('HomeView prompt handoff', () => {
       prompt: PLUGIN_AUTHORING_PROMPT,
       pluginId: 'od-plugin-authoring',
       appliedPluginSnapshotId: 'snap-authoring',
+      pluginInputs: {},
       projectKind: 'other',
     }));
   });

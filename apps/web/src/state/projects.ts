@@ -59,6 +59,7 @@ export async function createProject(input: {
   // project. Used by the PluginLoopHome flow on Home.
   pluginId?: string;
   appliedPluginSnapshotId?: string;
+  pluginInputs?: Record<string, unknown>;
 }): Promise<{ project: Project; conversationId: string; appliedPluginSnapshotId?: string } | null> {
   try {
     // `randomUUID` falls back to `crypto.getRandomValues` / `Math.random`

@@ -1,11 +1,10 @@
 // Plugins discovery section on Home.
 //
-// Renders a single curated workflow bar (Lovart-style) over the
-// plugin catalog: From source · Generate · Export plus concrete
-// starter buckets such as From Figma, Slides, React, and Vue. Picking
-// a category filters the grid; "All" shows everything visible. A
-// small Featured chip sits orthogonal to the row for quick access to
-// curator-promoted picks.
+// Renders a curated workflow bar (Lovart-style) over the plugin catalog:
+// Import · Create · Export · Refine · Extend. A scoped child row appears
+// inside the active lane, e.g. Create -> Prototype / Slides / Design
+// system / Media. A small Featured chip sits orthogonal to the rows for
+// quick access to curator-promoted picks.
 //
 // The category list is curated — finer metadata (surface, role tags,
 // scenario domains) lives on each plugin card and detail surface, not
@@ -55,6 +54,7 @@ export function PluginsHomeSection({
     catalog,
     selection,
     pickCategory,
+    pickSubcategory,
     clearFacets,
     hasActiveFacet,
     mode,
@@ -97,12 +97,26 @@ export function PluginsHomeSection({
             onModeChange={setMode}
             onClearFacets={clearFacets}
           />
-          <CategoryRow
-            options={catalog.category}
-            selectedSlug={selection.category}
-            totalVisible={totalVisible}
-            onPick={pickCategory}
-          />
+          <div
+            className="plugins-home__facets"
+            role="group"
+            aria-label="Plugin filters"
+          >
+            <CategoryRow
+              options={catalog.category}
+              selectedSlug={selection.category}
+              totalVisible={totalVisible}
+              onPick={pickCategory}
+            />
+            {selection.category ? (
+              <SubcategoryRow
+                parent={catalog.category.find((opt) => opt.slug === selection.category)}
+                options={catalog.subcategory[selection.category] ?? []}
+                selectedSlug={selection.subcategory}
+                onPick={pickSubcategory}
+              />
+            ) : null}
+          </div>
 
           {filtered.length === 0 ? (
             <div className="plugins-home__empty plugins-home__empty--filtered">
@@ -206,38 +220,76 @@ function CategoryRow({ options, selectedSlug, totalVisible, onPick }: CategoryRo
   if (options.length === 0) return null;
   return (
     <div
-      className="plugins-home__facets"
-      role="group"
-      aria-label="Plugin filters"
+      className="plugins-home__facet-row plugins-home__facet-row--inline"
+      data-testid="plugins-home-row-category"
     >
       <div
-        className="plugins-home__facet-row plugins-home__facet-row--inline"
-        data-testid="plugins-home-row-category"
+        className="plugins-home__facet-pills"
+        role="tablist"
+        aria-label="Category filter"
       >
-        <div
-          className="plugins-home__facet-pills"
-          role="tablist"
-          aria-label="Category filter"
-        >
+        <CategoryPill
+          slug={null}
+          label="All"
+          count={totalVisible}
+          active={selectedSlug === null}
+          onPick={onPick}
+          variant="all"
+        />
+        {options.map((opt) => (
           <CategoryPill
-            slug={null}
-            label="All"
-            count={totalVisible}
-            active={selectedSlug === null}
+            key={opt.slug}
+            slug={opt.slug}
+            label={opt.label}
+            count={opt.count}
+            active={selectedSlug === opt.slug}
             onPick={onPick}
-            variant="all"
           />
-          {options.map((opt) => (
-            <CategoryPill
-              key={opt.slug}
-              slug={opt.slug}
-              label={opt.label}
-              count={opt.count}
-              active={selectedSlug === opt.slug}
-              onPick={onPick}
-            />
-          ))}
-        </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface SubcategoryRowProps {
+  parent: FacetOption | undefined;
+  options: FacetOption[];
+  selectedSlug: string | null;
+  onPick: (slug: string | null) => void;
+}
+
+function SubcategoryRow({ parent, options, selectedSlug, onPick }: SubcategoryRowProps) {
+  if (!parent || options.length === 0) return null;
+  return (
+    <div
+      className="plugins-home__facet-row plugins-home__facet-row--inline plugins-home__facet-row--sub"
+      data-testid={`plugins-home-row-subcategory-${parent.slug}`}
+    >
+      <div
+        className="plugins-home__facet-pills"
+        role="tablist"
+        aria-label={`${parent.label} subcategory filter`}
+      >
+        <CategoryPill
+          slug={null}
+          label={`All ${parent.label}`}
+          count={parent.count}
+          active={selectedSlug === null}
+          onPick={onPick}
+          variant="sub-all"
+          testId={`plugins-home-pill-subcategory-${parent.slug}-all`}
+        />
+        {options.map((opt) => (
+          <CategoryPill
+            key={opt.slug}
+            slug={opt.slug}
+            label={opt.label}
+            count={opt.count}
+            active={selectedSlug === opt.slug}
+            onPick={onPick}
+            testId={`plugins-home-pill-subcategory-${parent.slug}-${opt.slug}`}
+          />
+        ))}
       </div>
     </div>
   );
@@ -248,11 +300,12 @@ interface CategoryPillProps {
   label: string;
   count: number;
   active: boolean;
-  variant?: 'all';
+  variant?: 'all' | 'sub-all';
+  testId?: string;
   onPick: (slug: string | null) => void;
 }
 
-function CategoryPill({ slug, label, count, active, variant, onPick }: CategoryPillProps) {
+function CategoryPill({ slug, label, count, active, variant, testId, onPick }: CategoryPillProps) {
   return (
     <button
       type="button"
@@ -262,11 +315,12 @@ function CategoryPill({ slug, label, count, active, variant, onPick }: CategoryP
         'plugins-home__pill',
         active ? 'is-active' : '',
         variant === 'all' ? 'plugins-home__pill--all' : '',
+        variant === 'sub-all' ? 'plugins-home__pill--sub-all' : '',
       ]
         .filter(Boolean)
         .join(' ')}
       onClick={() => onPick(slug)}
-      data-testid={`plugins-home-pill-category-${slug ?? 'all'}`}
+      data-testid={testId ?? `plugins-home-pill-category-${slug ?? 'all'}`}
     >
       <span>{label}</span>
       <span className="plugins-home__pill-count">{count}</span>

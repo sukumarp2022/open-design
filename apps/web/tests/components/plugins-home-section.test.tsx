@@ -2,18 +2,16 @@
 
 // Plugins home section — UI contract.
 //
-// The section renders a single curated workflow bar (From source /
-// Generate / Export plus concrete starter buckets). Picking a
-// category filters the grid; the All pill clears the category filter.
-// A Featured chip sits orthogonal to the row and overrides the
-// category selection. This suite locks in:
+// The section renders a single curated workflow bar (Import / Create /
+// Export / Refine / Extend). Picking a category filters the grid; the
+// All pill clears the category filter. A Featured chip sits orthogonal
+// to the row and overrides the category selection. This suite locks in:
 //
 //   1. The category row renders with All + the curated buckets that
 //      have at least one plugin.
 //   2. Picking a category filters the grid to plugins in that
 //      bucket.
-//   3. HyperFrames is a tag-driven bucket — picking it filters to
-//      hyperframes-tagged plugins even though they share mode=video.
+//   3. Concrete create types do not duplicate the Create parent as tabs.
 //   4. Featured chip overrides the category selection and only shows
 //      curator-promoted plugins.
 
@@ -70,6 +68,8 @@ const sample: InstalledPluginRecord[] = [
   makePlugin({ id: 'f', mode: 'deck' }),
   makePlugin({ id: 'g', mode: 'scenario', taskKind: 'figma-migration' }),
   makePlugin({ id: 'h', mode: 'export', tags: ['export', 'react'] }),
+  makePlugin({ id: 'i', mode: 'scenario', taskKind: 'tune-collab' }),
+  makePlugin({ id: 'j', mode: 'scenario', taskKind: 'new-generation', tags: ['plugin-authoring'] }),
 ];
 
 describe('PluginsHomeSection (category bar)', () => {
@@ -86,17 +86,19 @@ describe('PluginsHomeSection (category bar)', () => {
     );
     expect(screen.getByTestId('plugins-home-row-category')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-all')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-from-source')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-generate')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-import')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-create')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-export')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-from-figma')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-deck')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-prototype')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-design-system')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-hyperframes')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-video')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-image')).toBeTruthy();
-    expect(screen.getByTestId('plugins-home-pill-category-react')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-refine')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-extend')).toBeTruthy();
+    expect(screen.queryByTestId('plugins-home-pill-category-from-figma')).toBeNull();
+    expect(screen.queryByTestId('plugins-home-pill-category-deck')).toBeNull();
+    expect(screen.queryByTestId('plugins-home-pill-category-prototype')).toBeNull();
+    expect(screen.queryByTestId('plugins-home-pill-category-design-system')).toBeNull();
+    expect(screen.queryByTestId('plugins-home-pill-category-hyperframes')).toBeNull();
+    expect(screen.queryByTestId('plugins-home-pill-category-video')).toBeNull();
+    expect(screen.queryByTestId('plugins-home-pill-category-image')).toBeNull();
+    expect(screen.queryByTestId('plugins-home-pill-category-react')).toBeNull();
     // Surface / Type / Scenario rows and the More disclosure are gone.
     expect(screen.queryByTestId('plugins-home-row-surface')).toBeNull();
     expect(screen.queryByTestId('plugins-home-row-type')).toBeNull();
@@ -115,8 +117,7 @@ describe('PluginsHomeSection (category bar)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    // The sample fixture has no audio plugin, so the audio pill must
-    // not render.
+    // Concrete child buckets are intentionally not rendered as tabs.
     expect(screen.queryByTestId('plugins-home-pill-category-audio')).toBeNull();
   });
 
@@ -131,9 +132,17 @@ describe('PluginsHomeSection (category bar)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    fireEvent.click(screen.getByTestId('plugins-home-pill-category-image'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-all'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-create'));
     const items = within(screen.getByRole('list')).getAllByRole('listitem');
-    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['c']);
+    expect(items.map((i) => i.getAttribute('data-plugin-id')).sort()).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+    ]);
   });
 
   it('workflow pills filter source and export plugins', () => {
@@ -151,12 +160,12 @@ describe('PluginsHomeSection (category bar)', () => {
     let items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['h']);
 
-    fireEvent.click(screen.getByTestId('plugins-home-pill-category-from-source'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-import'));
     items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['g']);
   });
 
-  it('HyperFrames pill filters to hyperframes-tagged plugins (subset of video)', () => {
+  it('Extend separates plugin authoring from normal creation', () => {
     render(
       <PluginsHomeSection
         plugins={sample}
@@ -167,9 +176,9 @@ describe('PluginsHomeSection (category bar)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    fireEvent.click(screen.getByTestId('plugins-home-pill-category-hyperframes'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-extend'));
     const items = within(screen.getByRole('list')).getAllByRole('listitem');
-    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['e']);
+    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['j']);
   });
 
   it('All pill clears the category filter', () => {
@@ -183,7 +192,7 @@ describe('PluginsHomeSection (category bar)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    fireEvent.click(screen.getByTestId('plugins-home-pill-category-prototype'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-create'));
     fireEvent.click(screen.getByTestId('plugins-home-pill-category-all'));
     const items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((i) => i.getAttribute('data-plugin-id')).sort()).toEqual([
@@ -195,6 +204,8 @@ describe('PluginsHomeSection (category bar)', () => {
       'f',
       'g',
       'h',
+      'i',
+      'j',
     ]);
   });
 
@@ -213,7 +224,7 @@ describe('PluginsHomeSection (category bar)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    fireEvent.click(screen.getByTestId('plugins-home-pill-category-image'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-create'));
     fireEvent.click(screen.getByTestId('plugins-home-chip-featured'));
     const items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['star']);

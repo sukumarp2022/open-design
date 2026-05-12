@@ -1,10 +1,9 @@
 // Faceted categorisation hook for the Plugins home section.
 //
-// Single-axis workflow model: the home filter row is a curated
-// shortlist of broad lanes (From source / Generate / Export) plus
-// starter buckets such as From Figma, Slides, React, and Vue. Picking
-// one filters the grid; selecting None ("All") shows every visible
-// plugin.
+// Two-level workflow model: the top row is a curated shortlist of
+// semantic lanes (Import / Create / Export / Refine / Extend). A scoped
+// child row exposes concrete buckets inside the active lane, e.g.
+// Create -> Prototype / Slides / Design system / Media.
 //
 // A small "Featured" toggle sits orthogonally to the category row —
 // when active it overrides the category selection and just shows
@@ -38,6 +37,7 @@ export interface UsePluginFacetsResult {
   catalog: FacetCatalog;
   selection: FacetSelection;
   pickCategory: (slug: string | null) => void;
+  pickSubcategory: (slug: string | null) => void;
   clearFacets: () => void;
   hasActiveFacet: boolean;
   mode: FilterMode;
@@ -49,6 +49,7 @@ export interface UsePluginFacetsResult {
 
 const EMPTY_SELECTION: FacetSelection = {
   category: null,
+  subcategory: null,
 };
 
 export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResult {
@@ -109,6 +110,15 @@ export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResul
     if (mode === 'featured') setMode('all');
     setSelection((prev) => ({
       category: prev.category === slug ? null : slug,
+      subcategory: null,
+    }));
+  }
+
+  function pickSubcategory(slug: string | null): void {
+    if (mode === 'featured') setMode('all');
+    setSelection((prev) => ({
+      ...prev,
+      subcategory: prev.subcategory === slug ? null : slug,
     }));
   }
 
@@ -118,7 +128,7 @@ export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResul
   }
 
   const hasActiveFacet =
-    selection.category !== null || query.trim().length > 0;
+    selection.category !== null || selection.subcategory !== null || query.trim().length > 0;
 
   return {
     visiblePlugins,
@@ -127,6 +137,7 @@ export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResul
     catalog,
     selection,
     pickCategory,
+    pickSubcategory,
     clearFacets,
     hasActiveFacet,
     mode,

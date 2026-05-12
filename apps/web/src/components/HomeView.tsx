@@ -45,6 +45,12 @@ interface ActivePlugin {
   chipId: string | null;
 }
 
+const AUTHORING_DEFAULT_SCENARIO_INPUTS = {
+  artifactKind: 'Open Design plugin',
+  audience: 'Open Design plugin authors',
+  topic: 'packaging a reusable workflow as an Open Design plugin',
+};
+
 interface Props {
   projects: Project[];
   projectsLoading?: boolean;
@@ -123,21 +129,21 @@ export function HomeView({
   async function usePlugin(
     record: InstalledPluginRecord,
     nextPrompt?: string | null,
-    options?: { projectKind?: ProjectKind; chipId?: string },
+    options?: { projectKind?: ProjectKind; chipId?: string; inputs?: Record<string, unknown> },
   ) {
     setPendingApplyId(record.id);
     if (options?.chipId) setPendingChipId(options.chipId);
     setError(null);
-    const result = await applyPlugin(record.id, { locale });
+    const result = await applyPlugin(record.id, { locale, inputs: options?.inputs });
     setPendingApplyId(null);
     setPendingChipId(null);
     if (!result) {
       setError(`Failed to apply ${record.title}. Make sure the daemon is reachable.`);
       return;
     }
-    const inputs: Record<string, unknown> = {};
+    const inputs: Record<string, unknown> = { ...(options?.inputs ?? {}) };
     for (const field of result.inputs ?? []) {
-      if (field.default !== undefined) inputs[field.name] = field.default;
+      if (field.default !== undefined && inputs[field.name] === undefined) inputs[field.name] = field.default;
     }
     setActive({
       record,
@@ -174,9 +180,8 @@ export function HomeView({
 
   useEffect(() => {
     if (!pendingAuthoringChipId || pluginsLoading) return;
-    const record =
-      plugins.find((plugin) => plugin.id === 'od-plugin-authoring')
-      ?? plugins.find((plugin) => plugin.id === 'od-new-generation');
+    const authoringRecord = plugins.find((plugin) => plugin.id === 'od-plugin-authoring');
+    const record = authoringRecord ?? plugins.find((plugin) => plugin.id === 'od-new-generation');
     setPendingAuthoringChipId(null);
     if (!record) {
       // The authoring scenario can be absent in a long-running dev
@@ -189,6 +194,7 @@ export function HomeView({
     void usePlugin(record, PLUGIN_AUTHORING_PROMPT, {
       projectKind: 'other',
       chipId: pendingAuthoringChipId === 'plugin-authoring' ? undefined : pendingAuthoringChipId,
+      ...(authoringRecord ? {} : { inputs: AUTHORING_DEFAULT_SCENARIO_INPUTS }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingAuthoringChipId, pluginsLoading, plugins]);
@@ -249,6 +255,7 @@ export function HomeView({
       appliedPluginSnapshotId: active?.result.appliedPlugin?.snapshotId ?? null,
       pluginTitle: active?.record.title ?? null,
       taskKind: active?.result.appliedPlugin?.taskKind ?? null,
+      pluginInputs: active ? active.inputs : null,
       projectKind: active?.projectKind ?? fallbackProjectKind,
     });
   }

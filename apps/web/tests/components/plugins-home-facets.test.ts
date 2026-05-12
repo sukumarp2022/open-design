@@ -1,10 +1,9 @@
 // Facet derivation contract for the plugins-home filter row. The
-// home section is driven by a single curated workflow axis (From
-// source / Generate / Export plus concrete starter buckets). These
-// tests lock the per-record category extraction, the catalog build
-// (preserves curated order, drops empty buckets), and the selection-
-// based filtering so the manifest fields the catalog depends on don't
-// silently drift.
+// home section is driven by a single curated workflow axis (Import /
+// Create / Export / Refine / Extend). These tests lock the per-record
+// category extraction, the catalog build (preserves curated order,
+// drops empty buckets), and the selection-based filtering so the
+// manifest fields the catalog depends on don't silently drift.
 
 import { describe, expect, it } from 'vitest';
 import type { InstalledPluginRecord } from '@open-design/contracts';
@@ -42,36 +41,41 @@ function fixture(overrides: {
 }
 
 describe('extractCategories', () => {
-  it('maps generation modes to Generate plus their concrete bucket', () => {
-    expect(extractCategories(fixture({ id: 'a', od: { mode: 'deck' } }))).toEqual(['generate', 'deck']);
-    expect(extractCategories(fixture({ id: 'b', od: { mode: 'prototype' } }))).toEqual(['generate', 'prototype']);
-    expect(extractCategories(fixture({ id: 'c', od: { mode: 'design-system' } }))).toEqual(['generate', 'design-system']);
-    expect(extractCategories(fixture({ id: 'd', od: { mode: 'image' } }))).toEqual(['generate', 'image']);
-    expect(extractCategories(fixture({ id: 'e', od: { mode: 'video' } }))).toEqual(['generate', 'video']);
-    expect(extractCategories(fixture({ id: 'f', od: { mode: 'audio' } }))).toEqual(['generate', 'audio']);
+  it('maps generation modes to the single Create lane', () => {
+    expect(extractCategories(fixture({ id: 'a', od: { mode: 'deck' } }))).toEqual(['create']);
+    expect(extractCategories(fixture({ id: 'b', od: { mode: 'prototype' } }))).toEqual(['create']);
+    expect(extractCategories(fixture({ id: 'c', od: { mode: 'design-system' } }))).toEqual(['create']);
+    expect(extractCategories(fixture({ id: 'd', od: { mode: 'image' } }))).toEqual(['create']);
+    expect(extractCategories(fixture({ id: 'e', od: { mode: 'video' } }))).toEqual(['create']);
+    expect(extractCategories(fixture({ id: 'f', od: { mode: 'audio' } }))).toEqual(['create']);
   });
 
-  it('maps workflow scenario plugins to source, generation, and export lanes', () => {
+  it('maps workflow scenario plugins to a single semantic lane', () => {
     expect(
       extractCategories(fixture({ id: 'figma', od: { taskKind: 'figma-migration', mode: 'scenario' } })),
-    ).toEqual(['from-source', 'from-figma']);
+    ).toEqual(['import']);
     expect(
       extractCategories(fixture({ id: 'folder', od: { taskKind: 'code-migration', mode: 'scenario' } })),
-    ).toEqual(['from-source', 'from-folder']);
+    ).toEqual(['import']);
     expect(
       extractCategories(fixture({ id: 'new', od: { taskKind: 'new-generation', mode: 'scenario' } })),
-    ).toEqual(['generate']);
+    ).toEqual(['create']);
     expect(
       extractCategories(fixture({ id: 'react-export', tags: ['export', 'react'], od: { mode: 'export' } })),
-    ).toEqual(['export', 'react']);
+    ).toEqual(['export']);
+    expect(
+      extractCategories(fixture({ id: 'tune', od: { taskKind: 'tune-collab', mode: 'scenario' } })),
+    ).toEqual(['refine']);
+    expect(
+      extractCategories(fixture({ id: 'author', tags: ['plugin-authoring'], od: { taskKind: 'new-generation', mode: 'scenario' } })),
+    ).toEqual(['extend']);
   });
 
-  it('places hyperframes-tagged video plugins in BOTH HyperFrames and Video buckets', () => {
+  it('keeps concrete create types under Create instead of duplicating child tabs', () => {
     const f = extractCategories(
       fixture({ id: 'a', tags: ['hyperframes', 'cinematic'], od: { mode: 'video' } }),
     );
-    expect(f).toEqual(expect.arrayContaining(['generate', 'hyperframes', 'video']));
-    expect(f).toHaveLength(3);
+    expect(f).toEqual(['create']);
   });
 
   it('returns no curated categories for plugins outside the shortlist', () => {
@@ -82,8 +86,8 @@ describe('extractCategories', () => {
   });
 
   it('normalises mode casing / formatting via slugify before matching', () => {
-    expect(extractCategories(fixture({ id: 'a', od: { mode: 'Design System' } }))).toEqual(['generate', 'design-system']);
-    expect(extractCategories(fixture({ id: 'b', od: { mode: 'design_system' } }))).toEqual(['generate', 'design-system']);
+    expect(extractCategories(fixture({ id: 'a', od: { mode: 'Design System' } }))).toEqual(['create']);
+    expect(extractCategories(fixture({ id: 'b', od: { mode: 'design_system' } }))).toEqual(['create']);
   });
 });
 
@@ -98,27 +102,24 @@ describe('buildFacetCatalog', () => {
       fixture({ id: 'e', od: { mode: 'video' } }),
       fixture({ id: 'f', tags: ['hyperframes'], od: { mode: 'video' } }),
       fixture({ id: 'react-export', tags: ['export', 'react'], od: { mode: 'export' } }),
+      fixture({ id: 'tune', od: { taskKind: 'tune-collab', mode: 'scenario' } }),
+      fixture({ id: 'author', tags: ['plugin-authoring'], od: { taskKind: 'new-generation', mode: 'scenario' } }),
       // Plugins outside the shortlist do not surface as filter pills.
       fixture({ id: 'g', od: { mode: 'utility' } }),
     ];
     const catalog = buildFacetCatalog(plugins);
     expect(catalog.category.map((o) => o.slug)).toEqual([
-      'from-source',
-      'generate',
+      'import',
+      'create',
       'export',
-      'from-figma',
-      'deck',
-      'design-system',
-      'hyperframes',
-      'video',
-      'image',
-      'react',
+      'refine',
+      'extend',
     ]);
-    expect(catalog.category.find((o) => o.slug === 'generate')?.count).toBe(6);
-    expect(catalog.category.find((o) => o.slug === 'design-system')?.count).toBe(2);
-    // The hyperframes-tagged video plugin counts toward BOTH buckets.
-    expect(catalog.category.find((o) => o.slug === 'hyperframes')?.count).toBe(1);
-    expect(catalog.category.find((o) => o.slug === 'video')?.count).toBe(2);
+    expect(catalog.category.find((o) => o.slug === 'create')?.count).toBe(6);
+    expect(catalog.category.find((o) => o.slug === 'import')?.count).toBe(1);
+    expect(catalog.category.find((o) => o.slug === 'export')?.count).toBe(1);
+    expect(catalog.category.find((o) => o.slug === 'refine')?.count).toBe(1);
+    expect(catalog.category.find((o) => o.slug === 'extend')?.count).toBe(1);
   });
 
   it('returns an empty category axis when no plugin matches a curated bucket', () => {
@@ -138,35 +139,30 @@ describe('applyFacetSelection', () => {
     fixture({ id: 'd', od: { mode: 'video' } }),
     fixture({ id: 'e', tags: ['hyperframes'], od: { mode: 'video' } }),
     fixture({ id: 'f', tags: ['export', 'react'], od: { mode: 'export' } }),
+    fixture({ id: 'g', od: { taskKind: 'code-migration', mode: 'scenario' } }),
   ];
 
   it('returns everything when no category is selected', () => {
     expect(
       applyFacetSelection(plugins, { category: null }).map((p) => p.id),
-    ).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
+    ).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
   });
 
   it('filters by the selected category slug', () => {
     expect(
-      applyFacetSelection(plugins, { category: 'design-system' }).map((p) => p.id),
-    ).toEqual(['a']);
-    expect(
-      applyFacetSelection(plugins, { category: 'video' }).map((p) => p.id).sort(),
-    ).toEqual(['d', 'e']);
+      applyFacetSelection(plugins, { category: 'create' }).map((p) => p.id),
+    ).toEqual(['a', 'b', 'c', 'd', 'e']);
     expect(
       applyFacetSelection(plugins, { category: 'export' }).map((p) => p.id),
     ).toEqual(['f']);
-  });
-
-  it('returns the hyperframes subset when HyperFrames is picked', () => {
     expect(
-      applyFacetSelection(plugins, { category: 'hyperframes' }).map((p) => p.id),
-    ).toEqual(['e']);
+      applyFacetSelection(plugins, { category: 'import' }).map((p) => p.id),
+    ).toEqual(['g']);
   });
 
   it('returns an empty list when no plugin matches the selected category', () => {
     expect(
-      applyFacetSelection(plugins, { category: 'audio' }).map((p) => p.id),
+      applyFacetSelection(plugins, { category: 'refine' }).map((p) => p.id),
     ).toEqual([]);
   });
 });
