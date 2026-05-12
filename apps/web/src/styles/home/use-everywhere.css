@@ -82,6 +82,13 @@
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+  padding: 0;
+}
+.use-everywhere-modal__close svg {
+  display: block;
+  width: 14px !important;
+  height: 14px !important;
+  stroke-width: 1.9;
 }
 .use-everywhere-modal__close:hover,
 .use-everywhere-modal__close:focus-visible {

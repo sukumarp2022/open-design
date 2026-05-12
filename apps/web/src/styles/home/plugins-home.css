@@ -71,15 +71,23 @@
   color: var(--text-faint);
   pointer-events: none;
 }
-.plugins-home__search-input {
+/* The bare <input> below picks up the global `input { ... }` rule
+   from index.css (border, radius-sm, padding, and a rectangular
+   focus box-shadow). We override every property the parent pill
+   already provides so the focus halo only paints once, on the
+   pill-shaped container, and the input renders flush inside it. */
+.plugins-home__search-input,
+.plugins-home__search-input:focus {
   appearance: none;
   width: 100%;
   border: 0;
   background: transparent;
-  padding: 6px 28px 6px 28px;
+  padding: 6px 28px;
   font-size: 12px;
   color: var(--text);
   outline: none;
+  box-shadow: none;
+  border-radius: 999px;
   font-family: inherit;
 }
 .plugins-home__search-input::placeholder {
@@ -90,14 +98,18 @@
   appearance: none;
   display: none;
 }
+/* Reset the global `button { ... }` defaults (padding 6/12, border,
+   radius-sm) so the 18×18 hit target actually fits the icon glyph
+   instead of clipping it down to zero. */
 .plugins-home__search-clear {
   position: absolute;
-  right: 6px;
+  right: 5px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: 0;
   border-radius: 50%;
   background: var(--bg-subtle);
@@ -106,8 +118,13 @@
   transition: background-color 120ms ease, color 120ms ease;
 }
 .plugins-home__search-clear:hover {
-  background: var(--border-soft);
+  background: var(--border-soft, var(--border));
+  border-color: transparent;
   color: var(--text);
+}
+.plugins-home__search-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 @media (max-width: 720px) {
   .plugins-home__head {
@@ -137,10 +154,11 @@
 }
 
 /* ============================================================
-   Faceted filter — three rows (Surface / Type / Scenario) with a
-   leading axis label on the left and pills wrapping on the right.
-   The Featured chip lives in a smaller mode strip above the rows
-   so it reads as orthogonal to the facet selections it overrides.
+   Faceted filter — single curated "category bar" (Deck /
+   Prototype / Design system / HyperFrames / Video / Image /
+   Audio). The Featured chip lives in a smaller mode strip
+   above the row so it reads as orthogonal to the category
+   selection it overrides.
    ============================================================ */
 .plugins-home__mode {
   display: flex;
@@ -212,16 +230,45 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
+  /* Pin the Scenario row (and the optional advanced panel below it)
+     directly under the sticky topbar so the category bar stays
+     reachable while the plugin grid scrolls underneath -- mirrors
+     the Lovart-style category bar. The opaque background keeps
+     scrolling tiles cleanly clipped behind the strip. The
+     --entry-topbar-h variable is defined on .entry-main--scroll. */
+  position: sticky;
+  top: var(--entry-topbar-h, 56px);
+  z-index: 5;
+  background: var(--bg);
 }
 .plugins-home__facet-row {
   display: grid;
   grid-template-columns: 80px 1fr;
   align-items: start;
   gap: 12px;
+}
+.plugins-home__facet-row--inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.plugins-home__facet-row--inline .plugins-home__facet-pills {
+  flex: 1;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  /* Hide horizontal scrollbar on WebKit while keeping wheel/drag scroll. */
+  scrollbar-color: var(--border-strong) transparent;
+}
+.plugins-home__facet-row--inline .plugins-home__facet-pills::-webkit-scrollbar {
+  height: 0;
+}
+.plugins-home__facet-row--inline .plugins-home__pill {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
 }
 .plugins-home__facet-label {
   padding-top: 7px;
@@ -293,6 +340,10 @@
   .plugins-home__facet-row {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+  .plugins-home__facet-row--inline {
+    flex-direction: row;
+    align-items: center;
   }
   .plugins-home__facet-label {
     padding-top: 0;

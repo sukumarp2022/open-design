@@ -57,9 +57,17 @@ interface Props {
    * modal); pass true when rendering inside a ~360–540px column.
    */
   compact?: boolean;
+  /**
+   * Optional top-level heading rendered above the section list so
+   * variants whose hero already owns the modal title can still
+   * advertise the manifest block as "Plugin info" / "About this
+   * plugin". Pass `null` (default) when the section IS the body and
+   * a label would be redundant (scenario fallback).
+   */
+  heading?: string;
 }
 
-export function PluginMetaSections({ record, omit, compact }: Props) {
+export function PluginMetaSections({ record, omit, compact, heading }: Props) {
   const [copied, setCopied] = useState(false);
 
   const manifest: PluginManifest = record.manifest ?? ({} as PluginManifest);
@@ -121,6 +129,24 @@ export function PluginMetaSections({ record, omit, compact }: Props) {
 
   return (
     <div className={wrapperClass} data-testid="plugin-meta-sections">
+      {heading ? (
+        <header className="plugin-meta-sections__heading">
+          <h3>{heading}</h3>
+          <span className="plugin-meta-sections__heading-meta">
+            <span>v{record.version}</span>
+            <span>·</span>
+            <span className={`plugin-meta-sections__trust trust-${record.trust}`}>
+              {record.trust}
+            </span>
+            {record.sourceKind ? (
+              <>
+                <span>·</span>
+                <span>{record.sourceKind}</span>
+              </>
+            ) : null}
+          </span>
+        </header>
+      ) : null}
       {!omit?.byline && hasAuthorBlock ? (
         <Section title="Author">
           <div

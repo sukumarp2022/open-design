@@ -15,6 +15,7 @@ import type {
 import { Icon } from '../Icon';
 import { PluginPreviewHero } from './PluginPreviewHero';
 import { PluginMetaSections } from './PluginMetaSections';
+import { PluginShareMenu } from './PluginShareMenu';
 
 interface Props {
   record: InstalledPluginRecord;
@@ -102,16 +103,19 @@ export function PluginScenarioDetail({
               ) : null}
             </div>
           </div>
-          <button
-            ref={closeRef}
-            type="button"
-            className="plugin-details-modal__close"
-            onClick={onClose}
-            aria-label="Close details"
-            title="Close (Esc)"
-          >
-            <Icon name="close" size={14} />
-          </button>
+          <div className="plugin-details-modal__head-actions">
+            <PluginShareMenu record={record} variant="default" />
+            <button
+              ref={closeRef}
+              type="button"
+              className="plugin-details-modal__close"
+              onClick={onClose}
+              aria-label="Close details"
+              title="Close (Esc)"
+            >
+              <Icon name="close" size={14} />
+            </button>
+          </div>
         </header>
 
         <div className="plugin-details-modal__body">

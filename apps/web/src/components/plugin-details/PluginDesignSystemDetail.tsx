@@ -147,11 +147,11 @@ export function PluginDesignSystemDetail({
               loadingLabel={t('ds.specLoading')}
             />
             <div className="plugin-info-pane plugin-design-sidebar__meta">
-              <div className="plugin-design-sidebar__divider">Plugin info</div>
               <PluginMetaSections
                 record={record}
                 omit={{ description: true }}
                 compact
+                heading="Plugin info"
               />
             </div>
           </div>

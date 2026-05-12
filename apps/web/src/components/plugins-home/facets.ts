@@ -1,41 +1,32 @@
 // Facet derivation for the Plugins home section.
 //
-// The home filter row is a 3-axis faceted control modeled on the
-// surface / type / scenario taxonomy plugin authors already populate
-// in `open-design.json`:
+// The home filter is a single-axis "category" picker over a curated
+// list of the major buckets users actually browse by:
 //
-//   - SURFACE  ← od.surface   (web / image / video / audio)
-//   - TYPE     ← od.mode      (design-system / deck / prototype / …)
-//   - SCENARIO ← od.scenario  (+ a tag whitelist for legacy plugins
-//                              that omit the field)
+//   Deck · Prototype · Design system · HyperFrames · Video · Image · Audio
 //
-// Centralising the derivation here keeps the categorisation hook pure
-// and lets tests assert facet membership without touching React. The
-// hook then composes selections across the three axes via AND.
+// Categories are NOT a free-form taxonomy — they are a small, hand
+// authored shortlist so the filter row stays one line and stays
+// pickable. Anything outside this list (template / utility / scenario
+// / role tags / domain tags / etc.) is intentionally not surfaced as
+// a filter; that metadata still lives on each plugin's card and
+// detail surface so users can drill in once they pick a category.
 //
-// Notes for future maintainers:
-//   - All axis values are `slugify`d so any fragment of free-form text
-//     ("Design System", "design_system", "design-system") collapses to
-//     a single bucket — both at derivation time AND when comparing
-//     selections.
-//   - Returning a fixed object shape (instead of `Record<string, …>`)
-//     keeps the React render path branch-free and mirrors the three
-//     pill rows the section paints 1:1.
-//   - Counts in each row reflect the catalog *as a whole*, not the
-//     post-filter slice. We deliberately avoid recomputing counts
-//     after a selection because per-axis counts that "go to zero" as
-//     the user clicks make the row visually noisy and obscure how the
-//     overall catalog is shaped.
+// Most categories map 1:1 to the manifest's `od.mode` field. The
+// HyperFrames category is the one exception: it is a tag-driven
+// virtual bucket because HyperFrames plugins all carry mode=video
+// and we want to expose them as a discoverable specialised slice
+// without flattening them into the generic "Video" pile.
+//
+// Counts in each category reflect the catalog *as a whole*, not the
+// post-filter slice. We deliberately avoid recomputing counts after
+// a selection because per-axis counts that "go to zero" as the user
+// clicks make the row visually noisy and obscure how the overall
+// catalog is shaped.
 
 import type { InstalledPluginRecord } from '@open-design/contracts';
 
-export type FacetAxis = 'surface' | 'type' | 'scenario';
-
-export interface PluginFacets {
-  surface: string[];
-  type: string[];
-  scenario: string[];
-}
+export type FacetAxis = 'category';
 
 export interface FacetOption {
   slug: string;
@@ -44,119 +35,18 @@ export interface FacetOption {
 }
 
 export interface FacetCatalog {
-  surface: FacetOption[];
-  type: FacetOption[];
-  scenario: FacetOption[];
+  category: FacetOption[];
 }
 
-// Tags that bubble up from low-level plugin metadata and never make
-// for useful filter chips. Drop them at derivation time so they don't
-// pollute the SCENARIO row (which falls back to tags when od.scenario
-// is missing).
-const NOISE = new Set<string>([
-  'first-party',
-  'third-party',
-  'phase-7',
-  'phase-1',
-  'atom',
-  'bundle',
-  'scenario',
-  'plugin',
-  'untitled',
-]);
+export interface FacetSelection {
+  category: string | null;
+}
 
-// Curated SCENARIO vocabulary — a focused set of business / use-case
-// tags so the SCENARIO row reads as a domain picker rather than a
-// free-form tag cloud. Anything outside this set still surfaces via
-// `od.scenario` (the manifest field) which is authored intentionally.
-const SCENARIO_TAG_WHITELIST = new Set<string>([
-  'engineering',
-  'product',
-  'design',
-  'marketing',
-  'sales',
-  'finance',
-  'hr',
-  'operations',
-  'education',
-  'personal',
-  'general',
-  'creator',
-  'healthcare',
-  'planning',
-  'legal',
-  'support',
-  'developer-tools',
-  'e-commerce-retail',
-  'media-consumer',
-  'productivity-saas',
-  'creative-artistic',
-  'professional-corporate',
-  'design-creative',
-  'ai-llm',
-  'social-media-post',
-  'live',
-  'live-artifacts',
-  'orbit',
-]);
-
-const SURFACE_LABELS: Record<string, string> = {
-  web: 'Web',
-  image: 'Image',
-  video: 'Video',
-  audio: 'Audio',
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  'design-system': 'Design system',
-  deck: 'Deck',
-  prototype: 'Prototype',
-  template: 'Template',
-  example: 'Example',
-  utility: 'Utility',
-  image: 'Image',
-  video: 'Video',
-  audio: 'Audio',
-  scenario: 'Scenario',
-};
-
-// Type-axis pinning order. The catalog skews toward Design-system entries
-// by raw count, but the home filter should foreground the *creative*
-// scenarios users come to Open Design for first — Decks and Prototypes
-// over data-modelling design systems. Anything outside this list still
-// sorts by count desc / alpha after the pinned three.
-const TYPE_PRIORITY: readonly string[] = ['deck', 'prototype', 'design-system'];
-
-const SCENARIO_LABELS: Record<string, string> = {
-  engineering: 'Engineering',
-  product: 'Product',
-  design: 'Design',
-  marketing: 'Marketing',
-  sales: 'Sales',
-  finance: 'Finance',
-  hr: 'HR',
-  operations: 'Operations',
-  education: 'Education',
-  personal: 'Personal',
-  general: 'General',
-  creator: 'Creator',
-  healthcare: 'Healthcare',
-  planning: 'Planning',
-  legal: 'Legal',
-  support: 'Support',
-  'developer-tools': 'Developer tools',
-  'e-commerce-retail': 'E-commerce',
-  'media-consumer': 'Media & consumer',
-  'productivity-saas': 'Productivity',
-  'creative-artistic': 'Creative',
-  'professional-corporate': 'Corporate',
-  'design-creative': 'Design & creative',
-  'ai-llm': 'AI & LLM',
-  'social-media-post': 'Social',
-  live: 'Live',
-  'live-artifacts': 'Live artifact',
-  orbit: 'Orbit',
-};
+interface CategoryDef {
+  slug: string;
+  label: string;
+  test: (record: InstalledPluginRecord) => boolean;
+}
 
 function slugify(value: string): string {
   return value
@@ -167,138 +57,83 @@ function slugify(value: string): string {
     .replace(/(^-|-$)+/g, '');
 }
 
-function humanise(slug: string): string {
-  return slug
-    .split('-')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
-}
-
 function manifestField(record: InstalledPluginRecord, key: string): string | undefined {
   const od = (record.manifest?.od ?? {}) as Record<string, unknown>;
   const v = od[key];
   return typeof v === 'string' ? v : undefined;
 }
 
-function manifestTags(record: InstalledPluginRecord): string[] {
+function manifestTagSlugs(record: InstalledPluginRecord): string[] {
   const raw = record.manifest?.tags ?? [];
-  return raw
-    .map((t) => slugify(String(t)))
-    .filter((t) => t && !NOISE.has(t));
+  return raw.map((t) => slugify(String(t))).filter(Boolean);
 }
 
-// Per-plugin facet derivation. The result lists each axis as a
-// possibly-empty array because:
-//   - SURFACE may be missing on legacy manifests (we fall back to
-//     scanning tags for one of the four known surface words).
-//   - TYPE is single-valued in our manifests but represented as an
-//     array so the filter compose path can stay uniform.
-//   - SCENARIO can be multi-valued: `od.scenario` plus any tag in
-//     SCENARIO_TAG_WHITELIST.
-export function extractFacets(record: InstalledPluginRecord): PluginFacets {
-  const surface = new Set<string>();
-  const type = new Set<string>();
-  const scenario = new Set<string>();
-
-  const surfaceRaw = manifestField(record, 'surface');
-  if (surfaceRaw) {
-    const s = slugify(surfaceRaw);
-    if (SURFACE_LABELS[s]) surface.add(s);
-  }
-
-  const tags = manifestTags(record);
-  if (surface.size === 0) {
-    for (const t of tags) {
-      if (SURFACE_LABELS[t]) {
-        surface.add(t);
-        break;
-      }
-    }
-  }
-
-  const modeRaw = manifestField(record, 'mode');
-  if (modeRaw) {
-    const m = slugify(modeRaw);
-    if (m && !NOISE.has(m)) type.add(m);
-  }
-
-  const scenarioRaw = manifestField(record, 'scenario');
-  if (scenarioRaw) {
-    const s = slugify(scenarioRaw);
-    if (s && !NOISE.has(s)) scenario.add(s);
-  }
-  for (const t of tags) {
-    if (SCENARIO_TAG_WHITELIST.has(t)) scenario.add(t);
-  }
-
-  return {
-    surface: [...surface],
-    type: [...type],
-    scenario: [...scenario],
+function byMode(mode: string): (record: InstalledPluginRecord) => boolean {
+  return (record) => {
+    const v = manifestField(record, 'mode');
+    return typeof v === 'string' && slugify(v) === mode;
   };
 }
 
-function labelFor(axis: FacetAxis, slug: string): string {
-  if (axis === 'surface') return SURFACE_LABELS[slug] ?? humanise(slug);
-  if (axis === 'type') return TYPE_LABELS[slug] ?? humanise(slug);
-  return SCENARIO_LABELS[slug] ?? humanise(slug);
+function byTag(tag: string): (record: InstalledPluginRecord) => boolean {
+  return (record) => manifestTagSlugs(record).includes(tag);
 }
 
-function buildAxis(
-  axis: FacetAxis,
-  plugins: InstalledPluginRecord[],
-): FacetOption[] {
+// Curated category list. Order is the display order — keep the
+// creative scenarios (Deck, Prototype, Design system) up front so
+// the eye lands on them first, with the media-generation buckets
+// (HyperFrames, Video, Image, Audio) trailing.
+//
+// HyperFrames is intentionally listed BEFORE Video so the
+// specialised motion-graphics bucket is discoverable instead of
+// being absorbed into the generic Video count. A plugin tagged
+// `hyperframes` will appear in BOTH the HyperFrames and Video
+// counts — that's expected: it lets users either drill into the
+// specialised bucket or browse all videos including HyperFrames.
+const PRIMARY_CATEGORIES: readonly CategoryDef[] = [
+  { slug: 'deck', label: 'Deck', test: byMode('deck') },
+  { slug: 'prototype', label: 'Prototype', test: byMode('prototype') },
+  { slug: 'design-system', label: 'Design system', test: byMode('design-system') },
+  { slug: 'hyperframes', label: 'HyperFrames', test: byTag('hyperframes') },
+  { slug: 'video', label: 'Video', test: byMode('video') },
+  { slug: 'image', label: 'Image', test: byMode('image') },
+  { slug: 'audio', label: 'Audio', test: byMode('audio') },
+];
+
+// Per-plugin category derivation. Returns the curated category
+// slugs the plugin belongs to (preserving curated order). The
+// filter UI only ever needs the category slugs; finer-grained
+// metadata (surface, scenario, role tags) is not exposed as a
+// filter and is rendered on each plugin card instead.
+export function extractCategories(record: InstalledPluginRecord): string[] {
+  return PRIMARY_CATEGORIES.filter((c) => c.test(record)).map((c) => c.slug);
+}
+
+export function buildCategoryCatalog(plugins: InstalledPluginRecord[]): FacetOption[] {
   const counts = new Map<string, number>();
   for (const p of plugins) {
-    const facets = extractFacets(p);
-    for (const slug of facets[axis]) {
+    for (const slug of extractCategories(p)) {
       counts.set(slug, (counts.get(slug) ?? 0) + 1);
     }
   }
-  return [...counts.entries()]
-    .sort((a, b) => {
-      if (axis === 'type') {
-        const ai = TYPE_PRIORITY.indexOf(a[0]);
-        const bi = TYPE_PRIORITY.indexOf(b[0]);
-        if (ai !== -1 && bi !== -1) return ai - bi;
-        if (ai !== -1) return -1;
-        if (bi !== -1) return 1;
-      }
-      return (b[1] - a[1]) || a[0].localeCompare(b[0]);
-    })
-    .map(([slug, count]) => ({ slug, label: labelFor(axis, slug), count }));
+  return PRIMARY_CATEGORIES.map((c) => ({
+    slug: c.slug,
+    label: c.label,
+    count: counts.get(c.slug) ?? 0,
+  })).filter((opt) => opt.count > 0);
 }
 
 export function buildFacetCatalog(plugins: InstalledPluginRecord[]): FacetCatalog {
-  return {
-    surface: buildAxis('surface', plugins),
-    type: buildAxis('type', plugins),
-    scenario: buildAxis('scenario', plugins),
-  };
-}
-
-// Filter a plugin set by an active selection in each axis. `null` in
-// any axis means "no filter on this axis" (the axis row's "All" pill).
-// Filters compose via AND across axes.
-export interface FacetSelection {
-  surface: string | null;
-  type: string | null;
-  scenario: string | null;
+  return { category: buildCategoryCatalog(plugins) };
 }
 
 export function applyFacetSelection(
   plugins: InstalledPluginRecord[],
   selection: FacetSelection,
 ): InstalledPluginRecord[] {
-  if (!selection.surface && !selection.type && !selection.scenario) return plugins;
-  return plugins.filter((p) => {
-    const facets = extractFacets(p);
-    if (selection.surface && !facets.surface.includes(selection.surface)) return false;
-    if (selection.type && !facets.type.includes(selection.type)) return false;
-    if (selection.scenario && !facets.scenario.includes(selection.scenario)) return false;
-    return true;
-  });
+  if (!selection.category) return plugins;
+  const want = selection.category;
+  return plugins.filter((p) => extractCategories(p).includes(want));
 }
 
 export function isFeaturedPlugin(record: InstalledPluginRecord): boolean {
@@ -307,8 +142,8 @@ export function isFeaturedPlugin(record: InstalledPluginRecord): boolean {
 }
 
 // Free-text search across the obvious user-facing surface area: title,
-// description, id, and tags. We compose this with the facet selection
-// via AND in the hook so the search narrows whatever the user has
+// description, id, and tags. Composed with the category selection via
+// AND inside the hook so the search narrows whatever the user has
 // already filtered to. Multi-word queries are required to all match
 // somewhere in the haystack so phrase fragments like "design slides"
 // don't surface unrelated plugins.
@@ -335,25 +170,19 @@ export function filterByQuery(
 
 // Smart default selection. The Plugins home shipped with no preselection,
 // which left first-time visitors staring at an unfiltered grid mixing
-// design-system patches with cinematic decks. We now nudge them into the
-// most representative slice (Web surface + Deck type) when both exist in
-// the live catalog. We deliberately fall back to no default when either
-// slug is missing so test fixtures and degraded catalogs render cleanly.
+// design-system patches with cinematic decks. We now nudge them into
+// the most representative creative slice (Deck) when it exists in the
+// live catalog. We deliberately fall back to no default when the slug
+// is missing so test fixtures and degraded catalogs render cleanly.
 export const PREFERRED_DEFAULT_SELECTION: FacetSelection = {
-  surface: 'web',
-  type: 'deck',
-  scenario: null,
+  category: 'deck',
 };
 
 export function resolveDefaultSelection(catalog: FacetCatalog): FacetSelection {
-  const wantSurface = PREFERRED_DEFAULT_SELECTION.surface;
-  const wantType = PREFERRED_DEFAULT_SELECTION.type;
-  const hasSurface = wantSurface
-    ? catalog.surface.some((o) => o.slug === wantSurface)
+  const wantCategory = PREFERRED_DEFAULT_SELECTION.category;
+  const hasCategory = wantCategory
+    ? catalog.category.some((o) => o.slug === wantCategory)
     : true;
-  const hasType = wantType
-    ? catalog.type.some((o) => o.slug === wantType)
-    : true;
-  if (hasSurface && hasType) return PREFERRED_DEFAULT_SELECTION;
-  return { surface: null, type: null, scenario: null };
+  if (hasCategory) return PREFERRED_DEFAULT_SELECTION;
+  return { category: null };
 }

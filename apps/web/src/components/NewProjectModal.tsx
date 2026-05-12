@@ -104,7 +104,7 @@ export function NewProjectModal({
             aria-label="Close"
             title="Close (Esc)"
           >
-            <Icon name="close" size={18} />
+            <Icon name="close" size={14} />
           </button>
         </header>
         <div className="new-project-modal__body">

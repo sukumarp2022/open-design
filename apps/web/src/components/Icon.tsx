@@ -135,10 +135,17 @@ export function Icon({ name, size = 14, strokeWidth = 1.6, ...rest }: Props) {
         </svg>
       );
     case 'close':
+      // Tighter X than the Lucide default (which uses coords 6→18 inside a
+      // 24-unit viewBox, so the visible glyph is only 50% of the icon box).
+      // Close buttons read as a small dot inside their container at typical
+      // 14-18px icon sizes. Extending the strokes to 4→20 lifts the visible
+      // extent to ~67% so the X feels balanced inside compact modal close
+      // buttons (PluginMediaDetail / NewProjectModal / PreviewModal) without
+      // overpowering chip-sized close icons (ChatComposer / SettingsDialog).
       return (
         <svg {...common}>
-          <path d="M18 6 6 18" />
-          <path d="m6 6 12 12" />
+          <path d="M20 4 4 20" />
+          <path d="m4 4 16 16" />
         </svg>
       );
     case 'copy':

@@ -267,6 +267,10 @@
   overflow-y: auto;
   background: var(--bg);
   padding: 0;
+  /* Used by descendants (e.g. the plugins-home Scenario row) to
+     pin themselves directly below the sticky topbar. Mirrors the
+     topbar's vertical footprint (12px top + 32px chip + 12px bottom). */
+  --entry-topbar-h: 56px;
 }
 .entry-main__inner {
   width: 100%;
@@ -286,9 +290,15 @@
   max-width: 1440px;
 }
 
-/* Floating top-right control inside the main scroll area. Stays
-   visually pinned regardless of scroll position so the avatar /
-   settings menu is always reachable. */
+/* Sticky top-right control strip inside the main scroll area.
+   Stays visually pinned regardless of scroll position so the
+   avatar / settings menu and the chip cluster are always
+   reachable. The strip is fully opaque so any content scrolling
+   underneath (plugin tiles, project cards, hero card) stays
+   clipped behind it instead of bleeding through the chip
+   gutter. The strip's height is mirrored by --entry-topbar-h on
+   .entry-main--scroll so descendants like the plugins-home
+   Scenario row can pin themselves immediately below it. */
 .entry-main__topbar {
   position: sticky;
   top: 0;
@@ -297,22 +307,16 @@
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  padding: 12px 18px 0;
-  pointer-events: none;
-}
-.entry-main__topbar > * {
-  pointer-events: auto;
+  padding: 12px 18px;
+  background: var(--bg);
 }
 /* Chip group — the GitHub star, inline model switcher, and Use
    everywhere chip live inside this wrapper so the responsive
-   media query can flip the whole row's visibility in one place.
-   Pointer-events stay enabled here too because the parent disables
-   them, and chips inside need to remain interactive. */
+   media query can flip the whole row's visibility in one place. */
 .entry-main__topbar-chips {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  pointer-events: auto;
 }
 
 /* Stacked menu-item layout — the collapsed model-switcher row

@@ -104,6 +104,7 @@ export function PluginExampleDetail({
               record={record}
               omit={{ description: true }}
               compact
+              heading="Plugin info"
             />
           </div>
         ),

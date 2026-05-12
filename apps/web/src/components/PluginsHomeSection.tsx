@@ -1,15 +1,20 @@
 // Plugins discovery section on Home.
 //
-// Renders a 3-axis faceted filter (SURFACE / TYPE / SCENARIO) over
-// the bundled plugin catalog. Each axis is independent and the
-// selections compose via AND, so users dial in scope one dimension at
-// a time. A small Featured chip sits orthogonal to the facet rows for
-// quick access to curator-promoted picks.
+// Renders a single curated "category bar" (Lovart-style) over the
+// bundled plugin catalog: Deck · Prototype · Design system ·
+// HyperFrames · Video · Image · Audio. Picking a category filters
+// the grid; "All" shows everything visible. A small Featured chip
+// sits orthogonal to the row for quick access to curator-promoted
+// picks.
 //
-// Derivation, catalog building and AND-composition live in
-// `./plugins-home/facets.ts`; per-axis selection state and the
-// Featured override live in `./plugins-home/usePluginFacets.ts`. This
-// file owns layout only.
+// The category list is intentionally short and curated — finer
+// metadata (surface, role tags, scenario domains) lives on each
+// plugin card and detail surface, not in the filter bar.
+//
+// Derivation, catalog building and category-based filtering live in
+// `./plugins-home/facets.ts`; selection state and the Featured
+// override live in `./plugins-home/usePluginFacets.ts`. This file
+// owns layout only.
 
 import type { InstalledPluginRecord } from '@open-design/contracts';
 import { Icon } from './Icon';
@@ -18,11 +23,7 @@ import {
   usePluginFacets,
   type FilterMode,
 } from './plugins-home/usePluginFacets';
-import type {
-  FacetAxis,
-  FacetOption,
-  FacetSelection,
-} from './plugins-home/facets';
+import type { FacetOption } from './plugins-home/facets';
 
 interface Props {
   plugins: InstalledPluginRecord[];
@@ -47,7 +48,7 @@ export function PluginsHomeSection({
     filtered,
     catalog,
     selection,
-    pickFacet,
+    pickCategory,
     clearFacets,
     hasActiveFacet,
     mode,
@@ -91,11 +92,11 @@ export function PluginsHomeSection({
             onModeChange={setMode}
             onClearFacets={clearFacets}
           />
-          <FacetTable
-            catalog={catalog}
-            selection={selection}
+          <CategoryRow
+            options={catalog.category}
+            selectedSlug={selection.category}
             totalVisible={totalVisible}
-            onPick={pickFacet}
+            onPick={pickCategory}
           />
 
           {filtered.length === 0 ? (
@@ -140,9 +141,9 @@ interface ModeRowProps {
   onClearFacets: () => void;
 }
 
-// Tiny strip above the facet table: Featured override + a clear-link
-// when at least one facet is active. Kept compact so the SURFACE row
-// is what the eye lands on first.
+// Tiny strip above the category row: Featured override + a clear-link
+// when at least one filter is active. Kept compact so the category
+// bar is what the eye lands on first.
 function ModeRow({
   mode,
   featuredCount,
@@ -189,86 +190,55 @@ function ModeRow({
   );
 }
 
-interface FacetTableProps {
-  catalog: ReturnType<typeof usePluginFacets>['catalog'];
-  selection: FacetSelection;
-  totalVisible: number;
-  onPick: (axis: FacetAxis, slug: string | null) => void;
-}
-
-function FacetTable({ catalog, selection, totalVisible, onPick }: FacetTableProps) {
-  return (
-    <div className="plugins-home__facets" role="group" aria-label="Plugin filters">
-      <FacetRow
-        axis="surface"
-        label="Surface"
-        options={catalog.surface}
-        selectedSlug={selection.surface}
-        totalVisible={totalVisible}
-        onPick={onPick}
-      />
-      <FacetRow
-        axis="type"
-        label="Type"
-        options={catalog.type}
-        selectedSlug={selection.type}
-        totalVisible={totalVisible}
-        onPick={onPick}
-      />
-      <FacetRow
-        axis="scenario"
-        label="Scenario"
-        options={catalog.scenario}
-        selectedSlug={selection.scenario}
-        totalVisible={totalVisible}
-        onPick={onPick}
-      />
-    </div>
-  );
-}
-
-interface FacetRowProps {
-  axis: FacetAxis;
-  label: string;
+interface CategoryRowProps {
   options: FacetOption[];
   selectedSlug: string | null;
   totalVisible: number;
-  onPick: (axis: FacetAxis, slug: string | null) => void;
+  onPick: (slug: string | null) => void;
 }
 
-function FacetRow({ axis, label, options, selectedSlug, totalVisible, onPick }: FacetRowProps) {
+function CategoryRow({ options, selectedSlug, totalVisible, onPick }: CategoryRowProps) {
   if (options.length === 0) return null;
   return (
-    <div className="plugins-home__facet-row" data-testid={`plugins-home-row-${axis}`}>
-      <span className="plugins-home__facet-label">{label}</span>
-      <div className="plugins-home__facet-pills" role="tablist" aria-label={`${label} filter`}>
-        <FacetPill
-          slug={null}
-          label="All"
-          count={totalVisible}
-          active={selectedSlug === null}
-          onPick={(slug) => onPick(axis, slug)}
-          axis={axis}
-          variant="all"
-        />
-        {options.map((opt) => (
-          <FacetPill
-            key={opt.slug}
-            slug={opt.slug}
-            label={opt.label}
-            count={opt.count}
-            active={selectedSlug === opt.slug}
-            onPick={(slug) => onPick(axis, slug)}
-            axis={axis}
+    <div
+      className="plugins-home__facets"
+      role="group"
+      aria-label="Plugin filters"
+    >
+      <div
+        className="plugins-home__facet-row plugins-home__facet-row--inline"
+        data-testid="plugins-home-row-category"
+      >
+        <div
+          className="plugins-home__facet-pills"
+          role="tablist"
+          aria-label="Category filter"
+        >
+          <CategoryPill
+            slug={null}
+            label="All"
+            count={totalVisible}
+            active={selectedSlug === null}
+            onPick={onPick}
+            variant="all"
           />
-        ))}
+          {options.map((opt) => (
+            <CategoryPill
+              key={opt.slug}
+              slug={opt.slug}
+              label={opt.label}
+              count={opt.count}
+              active={selectedSlug === opt.slug}
+              onPick={onPick}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-interface FacetPillProps {
-  axis: FacetAxis;
+interface CategoryPillProps {
   slug: string | null;
   label: string;
   count: number;
@@ -277,7 +247,7 @@ interface FacetPillProps {
   onPick: (slug: string | null) => void;
 }
 
-function FacetPill({ axis, slug, label, count, active, variant, onPick }: FacetPillProps) {
+function CategoryPill({ slug, label, count, active, variant, onPick }: CategoryPillProps) {
   return (
     <button
       type="button"
@@ -291,7 +261,7 @@ function FacetPill({ axis, slug, label, count, active, variant, onPick }: FacetP
         .filter(Boolean)
         .join(' ')}
       onClick={() => onPick(slug)}
-      data-testid={`plugins-home-pill-${axis}-${slug ?? 'all'}`}
+      data-testid={`plugins-home-pill-category-${slug ?? 'all'}`}
     >
       <span>{label}</span>
       <span className="plugins-home__pill-count">{count}</span>
@@ -305,11 +275,11 @@ interface SearchInputProps {
 }
 
 // Compact search field that lives in the section head. Search composes
-// with the facet selection via AND inside the hook, so a query narrows
-// whatever Surface / Type / Scenario the user has already picked rather
-// than discarding the facet context. We keep the UI a single text input
-// with an optional clear button so it sits inside the existing head row
-// without a heavyweight toolbar.
+// with the category selection via AND inside the hook, so a query
+// narrows whatever category the user has already picked rather than
+// discarding the category context. We keep the UI a single text input
+// with an optional clear button so it sits inside the existing head
+// row without a heavyweight toolbar.
 function SearchInput({ value, onChange }: SearchInputProps) {
   return (
     <div className="plugins-home__search">
@@ -333,7 +303,7 @@ function SearchInput({ value, onChange }: SearchInputProps) {
           aria-label="Clear search"
           data-testid="plugins-home-search-clear"
         >
-          <Icon name="close" size={11} />
+          <Icon name="close" size={12} />
         </button>
       ) : null}
     </div>

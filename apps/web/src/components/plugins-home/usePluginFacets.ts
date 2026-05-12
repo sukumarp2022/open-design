@@ -1,16 +1,15 @@
 // Faceted categorisation hook for the Plugins home section.
 //
-// Replaces the older single-row scenario-tag hook with a 3-axis
-// SURFACE / TYPE / SCENARIO model. Filters compose via AND across
-// axes (selecting Web + Slides + Marketing shows only plugins that
-// match all three). Each axis selection is independent so the user
-// can dial scope in / out one dimension at a time.
+// Single-axis "category" model: the home filter row is a curated
+// shortlist of major buckets (Deck / Prototype / Design system /
+// HyperFrames / Video / Image / Audio). Picking one filters the
+// grid; selecting None ("All") shows every visible plugin.
 //
-// A small "Featured" toggle sits orthogonally to the facets — when
-// active it overrides the facet selection and just shows the
-// curator-promoted plugins. We intentionally make Featured override
-// rather than AND-compose so a featured pick is never accidentally
-// hidden behind a still-selected facet pill.
+// A small "Featured" toggle sits orthogonally to the category row —
+// when active it overrides the category selection and just shows
+// the curator-promoted plugins. We intentionally make Featured
+// override rather than AND-compose so a featured pick is never
+// accidentally hidden behind a still-selected category pill.
 
 import { useEffect, useMemo, useState } from 'react';
 import type { InstalledPluginRecord } from '@open-design/contracts';
@@ -20,7 +19,6 @@ import {
   filterByQuery,
   isFeaturedPlugin,
   resolveDefaultSelection,
-  type FacetAxis,
   type FacetCatalog,
   type FacetSelection,
 } from './facets';
@@ -38,7 +36,7 @@ export interface UsePluginFacetsResult {
   filtered: InstalledPluginRecord[];
   catalog: FacetCatalog;
   selection: FacetSelection;
-  pickFacet: (axis: FacetAxis, slug: string | null) => void;
+  pickCategory: (slug: string | null) => void;
   clearFacets: () => void;
   hasActiveFacet: boolean;
   mode: FilterMode;
@@ -49,9 +47,7 @@ export interface UsePluginFacetsResult {
 }
 
 const EMPTY_SELECTION: FacetSelection = {
-  surface: null,
-  type: null,
-  scenario: null,
+  category: null,
 };
 
 export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResult {
@@ -70,7 +66,7 @@ export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResul
   // sort by visual-appeal score so the first viewport leads with the
   // cinematic decks / image / video templates rather than alphabetical
   // bundled noise. Featured plugins get a +1000 score boost inside the
-  // sort so they stay anchored to the front of every facet view.
+  // sort so they stay anchored to the front of every category view.
   const visiblePlugins = useMemo(
     () =>
       sortByVisualAppeal(
@@ -90,7 +86,7 @@ export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResul
     if (bootstrapped) return;
     if (visiblePlugins.length === 0) return;
     const next = resolveDefaultSelection(catalog);
-    if (next.surface !== null || next.type !== null || next.scenario !== null) {
+    if (next.category !== null) {
       setSelection(next);
     }
     setBootstrapped(true);
@@ -108,11 +104,10 @@ export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResul
     return filterByQuery(base, query);
   }, [mode, featuredList, visiblePlugins, selection, query]);
 
-  function pickFacet(axis: FacetAxis, slug: string | null): void {
+  function pickCategory(slug: string | null): void {
     if (mode === 'featured') setMode('all');
     setSelection((prev) => ({
-      ...prev,
-      [axis]: prev[axis] === slug ? null : slug,
+      category: prev.category === slug ? null : slug,
     }));
   }
 
@@ -122,10 +117,7 @@ export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResul
   }
 
   const hasActiveFacet =
-    selection.surface !== null ||
-    selection.type !== null ||
-    selection.scenario !== null ||
-    query.trim().length > 0;
+    selection.category !== null || query.trim().length > 0;
 
   return {
     visiblePlugins,
@@ -133,7 +125,7 @@ export function usePluginFacets(args: UsePluginFacetsArgs): UsePluginFacetsResul
     filtered,
     catalog,
     selection,
-    pickFacet,
+    pickCategory,
     clearFacets,
     hasActiveFacet,
     mode,
