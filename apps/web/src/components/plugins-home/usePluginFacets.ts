@@ -1,9 +1,10 @@
 // Faceted categorisation hook for the Plugins home section.
 //
-// Single-axis "category" model: the home filter row is a curated
-// shortlist of major buckets (Deck / Prototype / Design system /
-// HyperFrames / Video / Image / Audio). Picking one filters the
-// grid; selecting None ("All") shows every visible plugin.
+// Single-axis workflow model: the home filter row is a curated
+// shortlist of broad lanes (From source / Generate / Export) plus
+// starter buckets such as From Figma, Slides, React, and Vue. Picking
+// one filters the grid; selecting None ("All") shows every visible
+// plugin.
 //
 // A small "Featured" toggle sits orthogonally to the category row —
 // when active it overrides the category selection and just shows

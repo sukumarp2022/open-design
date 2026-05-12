@@ -1,26 +1,22 @@
 // Facet derivation for the Plugins home section.
 //
-// The home filter is a single-axis "category" picker over a curated
-// list of the major buckets users actually browse by:
+// The filter is a single-axis workflow picker. It intentionally mirrors
+// the Home hero rail's mental model instead of exposing raw manifest
+// modes:
 //
-//   Slides · Prototype · Design system · HyperFrames · Video · Image · Audio
+//   From source · Generate · Export · From Figma · From folder · ...
 //
-// (The "Slides" bucket maps to plugins with mode=deck — the slug
-// stays `deck` for stability while the user-facing label reads
-// "Slides" since it is the more universally understood term.)
+// The first three buckets describe the platform loop: migrate upstream
+// sources into Open Design, generate new artifacts, then hand artifacts
+// off to downstream frameworks. The remaining buckets are concrete
+// starter plugins inside that loop, so official plugins can seed the
+// catalog while community plugins can join later by using tags, task
+// kinds, modes, or pipeline atoms.
 //
-// Categories are NOT a free-form taxonomy — they are a small, hand
-// authored shortlist so the filter row stays one line and stays
-// pickable. Anything outside this list (template / utility / scenario
-// / role tags / domain tags / etc.) is intentionally not surfaced as
-// a filter; that metadata still lives on each plugin's card and
-// detail surface so users can drill in once they pick a category.
-//
-// Most categories map 1:1 to the manifest's `od.mode` field. The
-// HyperFrames category is the one exception: it is a tag-driven
-// virtual bucket because HyperFrames plugins all carry mode=video
-// and we want to expose them as a discoverable specialised slice
-// without flattening them into the generic "Video" pile.
+// Counts reflect overlapping membership. For example, an export plugin
+// can count under both Export and React, and a HyperFrames plugin can
+// count under both Generate and Video. This is deliberate: workflow
+// categories are browse affordances, not a mutually-exclusive taxonomy.
 //
 // Counts in each category reflect the catalog *as a whole*, not the
 // post-filter slice. We deliberately avoid recomputing counts after
@@ -67,9 +63,32 @@ function manifestField(record: InstalledPluginRecord, key: string): string | und
   return typeof v === 'string' ? v : undefined;
 }
 
+function manifestTaskKind(record: InstalledPluginRecord): string | undefined {
+  return manifestField(record, 'taskKind');
+}
+
 function manifestTagSlugs(record: InstalledPluginRecord): string[] {
   const raw = record.manifest?.tags ?? [];
   return raw.map((t) => slugify(String(t))).filter(Boolean);
+}
+
+function pipelineAtomSlugs(record: InstalledPluginRecord): string[] {
+  const stages = record.manifest?.od?.pipeline?.stages ?? [];
+  return stages.flatMap((stage) => stage.atoms.map(slugify));
+}
+
+function recordSlugs(record: InstalledPluginRecord): Set<string> {
+  return new Set([
+    slugify(record.id),
+    slugify(record.manifest?.name ?? ''),
+    slugify(record.title ?? ''),
+    slugify(manifestTaskKind(record) ?? ''),
+    slugify(manifestField(record, 'mode') ?? ''),
+    slugify(manifestField(record, 'scenario') ?? ''),
+    slugify(manifestField(record, 'surface') ?? ''),
+    ...manifestTagSlugs(record),
+    ...pipelineAtomSlugs(record),
+  ].filter(Boolean));
 }
 
 function byMode(mode: string): (record: InstalledPluginRecord) => boolean {
@@ -79,36 +98,68 @@ function byMode(mode: string): (record: InstalledPluginRecord) => boolean {
   };
 }
 
-function byTag(tag: string): (record: InstalledPluginRecord) => boolean {
-  return (record) => manifestTagSlugs(record).includes(tag);
+function hasAnySlug(record: InstalledPluginRecord, slugs: readonly string[]): boolean {
+  const haystack = recordSlugs(record);
+  return slugs.some((slug) => haystack.has(slug));
 }
 
-// Curated category list. Order is the display order — keep the
-// creative scenarios (Slides, Prototype, Design system) up front so
-// the eye lands on them first, with the media-generation buckets
-// (HyperFrames, Video, Image, Audio) trailing.
-//
-// HyperFrames is intentionally listed BEFORE Video so the
-// specialised motion-graphics bucket is discoverable instead of
-// being absorbed into the generic Video count. A plugin tagged
-// `hyperframes` will appear in BOTH the HyperFrames and Video
-// counts — that's expected: it lets users either drill into the
-// specialised bucket or browse all videos including HyperFrames.
+function byAnySlug(...slugs: string[]): (record: InstalledPluginRecord) => boolean {
+  return (record) => hasAnySlug(record, slugs);
+}
+
+function byTaskKind(taskKind: string): (record: InstalledPluginRecord) => boolean {
+  return (record) => slugify(manifestTaskKind(record) ?? '') === taskKind;
+}
+
+function matchesAny(record: InstalledPluginRecord, tests: Array<(record: InstalledPluginRecord) => boolean>): boolean {
+  return tests.some((test) => test(record));
+}
+
+const SOURCE_TESTS = [
+  byTaskKind('figma-migration'),
+  byTaskKind('code-migration'),
+  byAnySlug('import', 'source-import', 'from-source', 'migration', 'figma-migration', 'code-migration'),
+];
+
+const GENERATE_TESTS = [
+  byTaskKind('new-generation'),
+  byAnySlug('generate', 'generation', 'new-generation', 'media-generation', 'plugin-authoring'),
+  byMode('deck'),
+  byMode('prototype'),
+  byMode('design-system'),
+  byMode('image'),
+  byMode('video'),
+  byMode('audio'),
+];
+
+const EXPORT_TESTS = [
+  byAnySlug('export', 'downstream', 'handoff', 'react', 'reactjs', 'next', 'nextjs', 'vue', 'vuejs'),
+];
+
+// Curated workflow list. The top-level loop comes first, followed by
+// specific starter buckets that mirror the Home rail and the requested
+// downstream framework targets.
 const PRIMARY_CATEGORIES: readonly CategoryDef[] = [
+  { slug: 'from-source', label: 'From source', test: (record) => matchesAny(record, SOURCE_TESTS) },
+  { slug: 'generate', label: 'Generate', test: (record) => matchesAny(record, GENERATE_TESTS) },
+  { slug: 'export', label: 'Export', test: (record) => matchesAny(record, EXPORT_TESTS) },
+  { slug: 'from-figma', label: 'From Figma', test: byTaskKind('figma-migration') },
+  { slug: 'from-folder', label: 'From folder', test: byTaskKind('code-migration') },
+  { slug: 'create-plugin', label: 'Create plugin', test: byAnySlug('plugin-authoring') },
   { slug: 'deck', label: 'Slides', test: byMode('deck') },
   { slug: 'prototype', label: 'Prototype', test: byMode('prototype') },
   { slug: 'design-system', label: 'Design system', test: byMode('design-system') },
-  { slug: 'hyperframes', label: 'HyperFrames', test: byTag('hyperframes') },
+  { slug: 'hyperframes', label: 'HyperFrames', test: byAnySlug('hyperframes') },
   { slug: 'video', label: 'Video', test: byMode('video') },
   { slug: 'image', label: 'Image', test: byMode('image') },
   { slug: 'audio', label: 'Audio', test: byMode('audio') },
+  { slug: 'react', label: 'React', test: byAnySlug('react', 'reactjs') },
+  { slug: 'nextjs', label: 'Next.js', test: byAnySlug('next', 'nextjs') },
+  { slug: 'vue', label: 'Vue', test: byAnySlug('vue', 'vuejs') },
 ];
 
-// Per-plugin category derivation. Returns the curated category
-// slugs the plugin belongs to (preserving curated order). The
-// filter UI only ever needs the category slugs; finer-grained
-// metadata (surface, scenario, role tags) is not exposed as a
-// filter and is rendered on each plugin card instead.
+// Per-plugin category derivation. Returns the curated category slugs
+// the plugin belongs to, preserving display order.
 export function extractCategories(record: InstalledPluginRecord): string[] {
   return PRIMARY_CATEGORIES.filter((c) => c.test(record)).map((c) => c.slug);
 }
@@ -172,14 +223,11 @@ export function filterByQuery(
   });
 }
 
-// Smart default selection. The Plugins home shipped with no preselection,
-// which left first-time visitors staring at an unfiltered grid mixing
-// design-system patches with cinematic decks. We now nudge them into
-// the most representative creative slice (Slides) when it exists in
-// the live catalog. We deliberately fall back to no default when the
-// slug is missing so test fixtures and degraded catalogs render cleanly.
+// Smart default selection. Lead users into the broad creation lane so
+// the first grid feels useful without hiding the source/import/export
+// lanes one tap away.
 export const PREFERRED_DEFAULT_SELECTION: FacetSelection = {
-  category: 'deck',
+  category: 'generate',
 };
 
 export function resolveDefaultSelection(catalog: FacetCatalog): FacetSelection {

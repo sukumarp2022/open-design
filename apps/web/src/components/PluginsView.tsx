@@ -117,8 +117,8 @@ export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: () => void })
             Plugins
           </h1>
           <p className="plugins-view__lede">
-            Browse the same visual plugin catalog from Home, then manage your
-            user plugins, marketplace sources, and future team catalogs here.
+            Browse plugins by workflow: import from upstream sources, generate
+            new artifacts, and export downstream into app frameworks.
           </p>
         </div>
         <div className="plugins-view__hero-actions">
@@ -198,7 +198,7 @@ export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: () => void })
             onUse={(record) => void handleUsePlugin(record)}
             onOpenDetails={setDetailsRecord}
             title="Community"
-            subtitle="Things you can do and tasks to complete — packaged as plugins. Pick one to load a starter prompt, or use @ search from Home."
+            subtitle="Import from sources, generate artifacts, or export downstream — packaged as plugins. Pick one to load a starter prompt, or use @ search from Home."
             emptyMessage="No official plugins are registered yet. Restart the daemon if this looks wrong."
           />
         ) : null}
@@ -212,7 +212,7 @@ export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: () => void })
             onUse={(record) => void handleUsePlugin(record)}
             onOpenDetails={setDetailsRecord}
             title="My plugins"
-            subtitle="Plugins installed into your user registry. They appear in @ search and can be consumed by the agent like official plugins."
+            subtitle="Your imported workflow plugins. Tag them as source, generation, or export plugins so they appear beside the official starters."
             emptyMessage="No user plugins yet. Use Create / Import to install from GitHub, a daemon-local path, an HTTPS archive, or a marketplace name."
           />
         ) : null}

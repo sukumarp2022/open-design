@@ -1,15 +1,15 @@
 // Plugins discovery section on Home.
 //
-// Renders a single curated "category bar" (Lovart-style) over the
-// bundled plugin catalog: Slides · Prototype · Design system ·
-// HyperFrames · Video · Image · Audio. Picking a category filters
-// the grid; "All" shows everything visible. A small Featured chip
-// sits orthogonal to the row for quick access to curator-promoted
-// picks.
+// Renders a single curated workflow bar (Lovart-style) over the
+// plugin catalog: From source · Generate · Export plus concrete
+// starter buckets such as From Figma, Slides, React, and Vue. Picking
+// a category filters the grid; "All" shows everything visible. A
+// small Featured chip sits orthogonal to the row for quick access to
+// curator-promoted picks.
 //
-// The category list is intentionally short and curated — finer
-// metadata (surface, role tags, scenario domains) lives on each
-// plugin card and detail surface, not in the filter bar.
+// The category list is curated — finer metadata (surface, role tags,
+// scenario domains) lives on each plugin card and detail surface, not
+// in the filter bar.
 //
 // Derivation, catalog building and category-based filtering live in
 // `./plugins-home/facets.ts`; selection state and the Featured

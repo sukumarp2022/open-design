@@ -2,11 +2,11 @@
 
 // Plugins home section — UI contract.
 //
-// The section renders a single curated "category bar" (Slides /
-// Prototype / Design system / HyperFrames / Video / Image / Audio).
-// Picking a category filters the grid; the All pill clears the
-// category filter. A Featured chip sits orthogonal to the row and
-// overrides the category selection. This suite locks in:
+// The section renders a single curated workflow bar (From source /
+// Generate / Export plus concrete starter buckets). Picking a
+// category filters the grid; the All pill clears the category filter.
+// A Featured chip sits orthogonal to the row and overrides the
+// category selection. This suite locks in:
 //
 //   1. The category row renders with All + the curated buckets that
 //      have at least one plugin.
@@ -28,6 +28,7 @@ function makePlugin(overrides: {
   tags?: string[];
   featured?: boolean;
   mode?: string;
+  taskKind?: 'new-generation' | 'code-migration' | 'figma-migration' | 'tune-collab';
 }): InstalledPluginRecord {
   return {
     id: overrides.id,
@@ -44,6 +45,7 @@ function makePlugin(overrides: {
       ...(overrides.tags ? { tags: overrides.tags } : {}),
       od: {
         kind: 'scenario',
+        ...(overrides.taskKind ? { taskKind: overrides.taskKind } : {}),
         ...(overrides.mode ? { mode: overrides.mode } : {}),
         ...(overrides.featured ? { featured: true } : {}),
       },
@@ -66,6 +68,8 @@ const sample: InstalledPluginRecord[] = [
   makePlugin({ id: 'd', mode: 'video' }),
   makePlugin({ id: 'e', mode: 'video', tags: ['hyperframes'] }),
   makePlugin({ id: 'f', mode: 'deck' }),
+  makePlugin({ id: 'g', mode: 'scenario', taskKind: 'figma-migration' }),
+  makePlugin({ id: 'h', mode: 'export', tags: ['export', 'react'] }),
 ];
 
 describe('PluginsHomeSection (category bar)', () => {
@@ -82,12 +86,17 @@ describe('PluginsHomeSection (category bar)', () => {
     );
     expect(screen.getByTestId('plugins-home-row-category')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-all')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-from-source')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-generate')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-export')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-from-figma')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-deck')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-prototype')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-design-system')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-hyperframes')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-video')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-image')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-react')).toBeTruthy();
     // Surface / Type / Scenario rows and the More disclosure are gone.
     expect(screen.queryByTestId('plugins-home-row-surface')).toBeNull();
     expect(screen.queryByTestId('plugins-home-row-type')).toBeNull();
@@ -127,6 +136,26 @@ describe('PluginsHomeSection (category bar)', () => {
     expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['c']);
   });
 
+  it('workflow pills filter source and export plugins', () => {
+    render(
+      <PluginsHomeSection
+        plugins={sample}
+        loading={false}
+        activePluginId={null}
+        pendingApplyId={null}
+        onUse={() => {}}
+        onOpenDetails={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-export'));
+    let items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['h']);
+
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-from-source'));
+    items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['g']);
+  });
+
   it('HyperFrames pill filters to hyperframes-tagged plugins (subset of video)', () => {
     render(
       <PluginsHomeSection
@@ -164,6 +193,8 @@ describe('PluginsHomeSection (category bar)', () => {
       'd',
       'e',
       'f',
+      'g',
+      'h',
     ]);
   });
 

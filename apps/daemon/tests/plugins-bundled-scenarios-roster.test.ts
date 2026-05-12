@@ -28,10 +28,15 @@ const CANONICAL = new Map<string, { taskKind: string; pipelineStages: string[] }
 // Non-canonical scenarios. These ride on a canonical taskKind but
 // don't win the pipeline-fallback for it. The kind → scenario map in
 // `@open-design/contracts/scenario-defaults` is what routes UX
-// project kinds (image / video / audio) onto these plugins.
+// project kinds (image / video / audio) onto these plugins. Export
+// starters sit here too: they are user-facing plugins for downstream
+// handoff, but they must not become the canonical tune-collab fallback.
 const SIBLINGS = new Map<string, { taskKind: string }>([
   ['od-media-generation', { taskKind: 'new-generation' }],
   ['od-plugin-authoring', { taskKind: 'new-generation' }],
+  ['od-react-export',     { taskKind: 'tune-collab' }],
+  ['od-nextjs-export',    { taskKind: 'tune-collab' }],
+  ['od-vue-export',       { taskKind: 'tune-collab' }],
 ]);
 
 describe('plugins/_official/scenarios roster', () => {

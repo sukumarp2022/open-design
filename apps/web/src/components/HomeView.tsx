@@ -75,6 +75,7 @@ export function HomeView({
   const [pendingApplyId, setPendingApplyId] = useState<string | null>(null);
   const [pendingChipId, setPendingChipId] = useState<string | null>(null);
   const [pendingAuthoringChipId, setPendingAuthoringChipId] = useState<string | null>(null);
+  const [fallbackProjectKind, setFallbackProjectKind] = useState<ProjectKind | null>(null);
   const [active, setActive] = useState<ActivePlugin | null>(null);
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +105,7 @@ export function HomeView({
     consumedHandoffIdRef.current = promptHandoff.id;
     setActive(null);
     setError(null);
+    setFallbackProjectKind(promptHandoff.source === 'plugin-authoring' ? 'other' : null);
     setPrompt(promptHandoff.prompt);
     if (promptHandoff.focus) {
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -144,6 +146,7 @@ export function HomeView({
       projectKind: options?.projectKind ?? null,
       chipId: options?.chipId ?? null,
     });
+    setFallbackProjectKind(null);
     const query = result.query || resolvePluginQueryFallback(record.manifest?.od?.useCase?.query, locale);
     if (nextPrompt !== undefined && nextPrompt !== null) {
       setPrompt(nextPrompt);
@@ -156,11 +159,14 @@ export function HomeView({
 
   function clearActive() {
     setActive(null);
+    setFallbackProjectKind(null);
     setPrompt('');
   }
 
   function queuePluginAuthoring(chipId: string | null) {
     setActive(null);
+    setFallbackProjectKind('other');
+    setError(null);
     setPrompt(PLUGIN_AUTHORING_PROMPT);
     setPendingAuthoringChipId(chipId ?? 'plugin-authoring');
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -168,12 +174,16 @@ export function HomeView({
 
   useEffect(() => {
     if (!pendingAuthoringChipId || pluginsLoading) return;
-    const record = plugins.find((plugin) => plugin.id === 'od-plugin-authoring');
+    const record =
+      plugins.find((plugin) => plugin.id === 'od-plugin-authoring')
+      ?? plugins.find((plugin) => plugin.id === 'od-new-generation');
     setPendingAuthoringChipId(null);
     if (!record) {
-      setError(
-        'Bundled scenario "od-plugin-authoring" is not installed. Reinstall the daemon to restore the default plugin set.',
-      );
+      // The authoring scenario can be absent in a long-running dev
+      // daemon that started before the bundled plugin was added. If
+      // even the default scenario is missing, do not block the user:
+      // keep the prompt in place and submit as a naked `other`
+      // project so the server-side fallback can still attempt to bind.
       return;
     }
     void usePlugin(record, PLUGIN_AUTHORING_PROMPT, {
@@ -239,7 +249,7 @@ export function HomeView({
       appliedPluginSnapshotId: active?.result.appliedPlugin?.snapshotId ?? null,
       pluginTitle: active?.record.title ?? null,
       taskKind: active?.result.appliedPlugin?.taskKind ?? null,
-      projectKind: active?.projectKind ?? null,
+      projectKind: active?.projectKind ?? fallbackProjectKind,
     });
   }
 

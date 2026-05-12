@@ -32,6 +32,20 @@ const AUTHORING_PLUGIN = {
   },
 };
 
+const DEFAULT_PLUGIN = {
+  ...AUTHORING_PLUGIN,
+  id: 'od-new-generation',
+  title: 'New generation',
+  source: '/tmp/new-generation',
+  fsPath: '/tmp/new-generation',
+  manifest: {
+    ...AUTHORING_PLUGIN.manifest,
+    name: 'od-new-generation',
+    title: 'New generation',
+    description: 'Create new design artifacts',
+  },
+};
+
 const AUTHORING_APPLY_RESULT = {
   query: 'Create a plugin.',
   contextItems: [],
@@ -59,6 +73,15 @@ const AUTHORING_APPLY_RESULT = {
     status: 'fresh',
   },
   projectMetadata: {},
+};
+
+const DEFAULT_APPLY_RESULT = {
+  ...AUTHORING_APPLY_RESULT,
+  appliedPlugin: {
+    ...AUTHORING_APPLY_RESULT.appliedPlugin,
+    snapshotId: 'snap-default',
+    pluginId: 'od-new-generation',
+  },
 };
 
 describe('HomeView prompt handoff', () => {
@@ -138,6 +161,60 @@ describe('HomeView prompt handoff', () => {
       expect((input as HTMLTextAreaElement).value).toBe(PLUGIN_AUTHORING_PROMPT);
       expect(document.activeElement).toBe(input);
     });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('falls back to od-new-generation when od-plugin-authoring is not registered yet', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      if (typeof url === 'string' && url === '/api/plugins') {
+        return new Response(JSON.stringify({ plugins: [DEFAULT_PLUGIN] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (typeof url === 'string' && url.includes('/apply')) {
+        return new Response(JSON.stringify(DEFAULT_APPLY_RESULT), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    const onSubmit = vi.fn();
+
+    render(
+      <HomeView
+        projects={[]}
+        onSubmit={onSubmit}
+        onOpenProject={() => undefined}
+        onViewAllProjects={() => undefined}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId('home-hero-rail-create-plugin'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      '/api/plugins/od-new-generation/apply',
+      expect.anything(),
+    ));
+    await waitFor(() => {
+      expect((screen.getByTestId('home-hero-input') as HTMLTextAreaElement).value)
+        .toBe(PLUGIN_AUTHORING_PROMPT);
+      expect((screen.getByTestId('home-hero-submit') as HTMLButtonElement).disabled).toBe(false);
+    });
+    fireEvent.click(screen.getByTestId('home-hero-submit'));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: PLUGIN_AUTHORING_PROMPT,
+      pluginId: 'od-new-generation',
+      appliedPluginSnapshotId: 'snap-default',
+      projectKind: 'other',
+    }));
   });
 
   it('binds od-plugin-authoring before submitting the rail create-plugin prompt', async () => {
