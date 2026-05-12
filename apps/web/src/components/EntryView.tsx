@@ -30,6 +30,10 @@ import {
   fetchConnectors,
   fetchConnectorStatuses,
 } from '../providers/registry';
+import type {
+  PluginShareAction,
+  PluginShareProjectOutcome,
+} from '../state/projects';
 
 interface Props {
   skills: SkillSummary[];
@@ -72,9 +76,15 @@ interface Props {
       pendingPrompt?: string;
       pluginId?: string;
       appliedPluginSnapshotId?: string;
+      pluginInputs?: Record<string, unknown>;
       autoSendFirstMessage?: boolean;
     },
   ) => void;
+  onCreatePluginShareProject: (
+    pluginId: string,
+    action: PluginShareAction,
+    locale?: string,
+  ) => Promise<PluginShareProjectOutcome>;
   onImportClaudeDesign: (file: File) => Promise<void> | void;
   onImportFolder?: (baseDir: string) => Promise<void> | void;
   onOpenProject: (id: string) => void;
@@ -221,6 +231,7 @@ export function EntryView({
   projectsLoading = false,
   promptTemplatesLoading: _promptTemplatesLoading = false,
   onCreateProject,
+  onCreatePluginShareProject,
   onImportClaudeDesign,
   onImportFolder,
   onOpenProject,
@@ -304,6 +315,7 @@ export function EntryView({
       onApiModelChange={onApiModelChange}
       onThemeChange={onThemeChange}
       onCreateProject={onCreateProject}
+      onCreatePluginShareProject={onCreatePluginShareProject}
       onImportClaudeDesign={onImportClaudeDesign}
       {...(onImportFolder ? { onImportFolder } : {})}
       onOpenProject={onOpenProject}

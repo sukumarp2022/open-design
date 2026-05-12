@@ -14,6 +14,7 @@
 
 import { useMemo } from 'react';
 import type { InstalledPluginRecord } from '@open-design/contracts';
+import type { PluginShareAction } from '../../state/projects';
 import { Icon } from '../Icon';
 import { PreviewSurface } from './cards/PreviewSurface';
 import { inferPluginPreview } from './preview';
@@ -23,9 +24,14 @@ interface Props {
   isActive: boolean;
   isPending: boolean;
   pendingAny: boolean;
+  pendingShareAction?: { pluginId: string; action: PluginShareAction } | null;
   isFeatured: boolean;
   onUse: (record: InstalledPluginRecord) => void;
   onOpenDetails: (record: InstalledPluginRecord) => void;
+  onShareAction?: (
+    record: InstalledPluginRecord,
+    action: PluginShareAction,
+  ) => void;
 }
 
 const MAX_VISIBLE_TAGS = 3;
@@ -35,9 +41,11 @@ export function PluginCard({
   isActive,
   isPending,
   pendingAny,
+  pendingShareAction = null,
   isFeatured,
   onUse,
   onOpenDetails,
+  onShareAction,
 }: Props) {
   const preview = useMemo(() => inferPluginPreview(record), [record]);
   const description = record.manifest?.description ?? '';
@@ -49,6 +57,9 @@ export function PluginCard({
     [record.manifest?.tags],
   );
   const hasQuery = Boolean(record.manifest?.od?.useCase?.query);
+  const sharePendingAction =
+    pendingShareAction?.pluginId === record.id ? pendingShareAction.action : null;
+  const shareBusy = sharePendingAction !== null;
 
   return (
     <article
@@ -56,6 +67,7 @@ export function PluginCard({
       className={[
         'plugins-home__card',
         `plugins-home__card--${preview.kind}`,
+        onShareAction ? 'plugins-home__card--shareable' : '',
         isActive ? 'is-active' : '',
         isFeatured ? 'is-featured' : '',
       ]
@@ -100,34 +112,73 @@ export function PluginCard({
           ) : null}
         </div>
         <div className="plugins-home__overlay-actions">
-          <button
-            type="button"
-            className="plugins-home__action plugins-home__action--secondary"
-            onClick={() => onOpenDetails(record)}
-            aria-label={`View details for ${record.title}`}
-            data-testid={`plugins-home-details-${record.id}`}
-          >
-            <Icon name="eye" size={12} />
-            <span>Details</span>
-          </button>
-          <button
-            type="button"
-            className="plugins-home__action plugins-home__action--primary"
-            onClick={() => onUse(record)}
-            disabled={isPending || pendingAny}
-            aria-busy={isPending ? 'true' : undefined}
-            data-testid={`plugins-home-use-${record.id}`}
-          >
-            {isPending
-              ? 'Applying…'
-              : hasQuery
-                ? isActive
-                  ? 'Reload'
-                  : 'Use'
-                : isActive
-                  ? 'Active'
-                  : 'Use'}
-          </button>
+          <div className="plugins-home__overlay-actions-main">
+            <button
+              type="button"
+              className="plugins-home__action plugins-home__action--secondary"
+              onClick={() => onOpenDetails(record)}
+              aria-label={`View details for ${record.title}`}
+              data-testid={`plugins-home-details-${record.id}`}
+            >
+              <Icon name="eye" size={12} />
+              <span>Details</span>
+            </button>
+            <button
+              type="button"
+              className="plugins-home__action plugins-home__action--primary"
+              onClick={() => onUse(record)}
+              disabled={isPending || pendingAny || shareBusy}
+              aria-busy={isPending ? 'true' : undefined}
+              data-testid={`plugins-home-use-${record.id}`}
+            >
+              {isPending
+                ? 'Applying…'
+                : hasQuery
+                  ? isActive
+                    ? 'Reload'
+                    : 'Use'
+                  : isActive
+                    ? 'Active'
+                    : 'Use'}
+            </button>
+          </div>
+          {onShareAction ? (
+            <div
+              className="plugins-home__share-actions"
+              aria-label={`Share ${record.title}`}
+            >
+              <button
+                type="button"
+                className="plugins-home__action plugins-home__action--secondary plugins-home__action--compact"
+                onClick={() => onShareAction(record, 'publish-github')}
+                disabled={pendingAny || shareBusy}
+                aria-busy={sharePendingAction === 'publish-github' ? 'true' : undefined}
+                title="Publish as a GitHub repository"
+                data-testid={`plugins-home-publish-github-${record.id}`}
+              >
+                <Icon
+                  name={sharePendingAction === 'publish-github' ? 'spinner' : 'github'}
+                  size={12}
+                />
+                <span>{sharePendingAction === 'publish-github' ? 'Starting…' : 'Repo'}</span>
+              </button>
+              <button
+                type="button"
+                className="plugins-home__action plugins-home__action--secondary plugins-home__action--compact"
+                onClick={() => onShareAction(record, 'contribute-open-design')}
+                disabled={pendingAny || shareBusy}
+                aria-busy={sharePendingAction === 'contribute-open-design' ? 'true' : undefined}
+                title="Open an Open Design pull request"
+                data-testid={`plugins-home-contribute-open-design-${record.id}`}
+              >
+                <Icon
+                  name={sharePendingAction === 'contribute-open-design' ? 'spinner' : 'share'}
+                  size={12}
+                />
+                <span>{sharePendingAction === 'contribute-open-design' ? 'Starting…' : 'PR'}</span>
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 

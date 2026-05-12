@@ -13,6 +13,7 @@ import type {
   InstalledPluginRecord,
   ProjectKind,
 } from '@open-design/contracts';
+import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
 import {
   applyPlugin,
   listPlugins,
@@ -254,14 +255,15 @@ export function HomeView({
   function submit() {
     const trimmed = prompt.trim();
     if (!trimmed) return;
+    const defaultInputs = { prompt: trimmed };
     onSubmit({
       prompt: trimmed,
-      pluginId: active?.record.id ?? null,
+      pluginId: active?.record.id ?? DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
       appliedPluginSnapshotId: active?.result.appliedPlugin?.snapshotId ?? null,
       pluginTitle: active?.record.title ?? null,
       taskKind: active?.result.appliedPlugin?.taskKind ?? null,
-      pluginInputs: active ? active.inputs : null,
-      projectKind: active?.projectKind ?? fallbackProjectKind,
+      pluginInputs: active ? active.inputs : defaultInputs,
+      projectKind: active?.projectKind ?? fallbackProjectKind ?? 'other',
     });
   }
 

@@ -37,12 +37,17 @@ import {
 import { applyAppearanceToDocument } from './state/appearance';
 import {
   createProject,
+  createPluginShareProject,
   deleteProject as deleteProjectApi,
   importClaudeDesignZip,
   importFolderProject,
   listProjects,
   listTemplates,
   patchProject,
+} from './state/projects';
+import type {
+  PluginShareAction,
+  PluginShareProjectOutcome,
 } from './state/projects';
 import { liveArtifactTabId } from './types';
 import type {
@@ -543,6 +548,7 @@ export function App() {
         pendingPrompt?: string;
         pluginId?: string;
         appliedPluginSnapshotId?: string;
+        pluginInputs?: Record<string, unknown>;
         autoSendFirstMessage?: boolean;
       },
     ) => {
@@ -560,6 +566,7 @@ export function App() {
         ...(input.appliedPluginSnapshotId
           ? { appliedPluginSnapshotId: input.appliedPluginSnapshotId }
           : {}),
+        ...(input.pluginInputs ? { pluginInputs: input.pluginInputs } : {}),
       });
       if (!result) return;
       // PluginLoopHome flow: the user already typed (or accepted) the
@@ -578,15 +585,52 @@ export function App() {
              back to manual send. */
         }
       }
+      const project = result.appliedPluginSnapshotId
+        ? {
+            ...result.project,
+            appliedPluginSnapshotId: result.appliedPluginSnapshotId,
+          }
+        : result.project;
       setProjects((curr) => [
-        result.project,
-        ...curr.filter((p) => p.id !== result.project.id),
+        project,
+        ...curr.filter((p) => p.id !== project.id),
       ]);
       navigate({
         kind: 'project',
-        projectId: result.project.id,
+        projectId: project.id,
         fileName: null,
       });
+    },
+    [],
+  );
+
+  const handleCreatePluginShareProject = useCallback(
+    async (
+      pluginId: string,
+      action: PluginShareAction,
+      locale?: string,
+    ): Promise<PluginShareProjectOutcome> => {
+      const outcome = await createPluginShareProject(pluginId, action, locale);
+      if (!outcome.ok) return outcome;
+      try {
+        window.sessionStorage.setItem(
+          `od:auto-send-first:${outcome.project.id}`,
+          '1',
+        );
+      } catch {
+        // If sessionStorage is unavailable, the project still opens with
+        // the prepared prompt in the composer.
+      }
+      setProjects((curr) => [
+        outcome.project,
+        ...curr.filter((p) => p.id !== outcome.project.id),
+      ]);
+      navigate({
+        kind: 'project',
+        projectId: outcome.project.id,
+        fileName: null,
+      });
+      return outcome;
     },
     [],
   );
@@ -846,6 +890,7 @@ export function App() {
           projectsLoading={projectsLoading}
           promptTemplatesLoading={promptTemplatesLoading}
           onCreateProject={handleCreateProject}
+          onCreatePluginShareProject={handleCreatePluginShareProject}
           onImportClaudeDesign={handleImportClaudeDesign}
           onImportFolder={handleImportFolder}
           onOpenProject={handleOpenProject}

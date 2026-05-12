@@ -26,8 +26,9 @@ export interface PluginLoopSubmit {
   // stamp on the new project's metadata. The daemon-side default
   // binding then resolves to the matching scenario plugin (image /
   // video / audio → od-media-generation, others → od-new-generation).
-  // Null means "no chip selected; use the historical 'prototype'
-  // default so legacy callers behave as before".
+  // Null means the caller did not stamp an explicit kind. HomeView's
+  // free-form fallback uses `other` and binds the hidden od-default
+  // router plugin so the agent asks for the exact task type in-chat.
   projectKind?: 'prototype' | 'deck' | 'template' | 'image' | 'video' | 'audio' | 'other' | null;
 }
 

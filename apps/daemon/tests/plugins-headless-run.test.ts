@@ -23,13 +23,22 @@
 // gets extended to assert the first SSE event is `pipeline_stage_started`.
 
 import type http from 'node:http';
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import url from 'node:url';
+import { promisify } from 'node:util';
 import { startServer } from '../src/server.js';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirname, '../../..');
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'plugin-fixtures', 'sample-plugin');
+const CLI_SRC = path.join(__dirname, '../src/cli.ts');
+const TSX_CLI = path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+const execFileP = promisify(execFile);
 
 let server: http.Server;
 let baseUrl: string;
@@ -50,6 +59,55 @@ afterAll(async () => {
   await Promise.resolve(shutdown?.());
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
+
+async function withFakeAgent<T>(
+  binName: string,
+  script: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const dir = await mkdtemp(path.join(tmpdir(), 'od-headless-agent-bin-'));
+  const oldPath = process.env.PATH;
+  try {
+    if (process.platform === 'win32') {
+      const runner = path.join(dir, `${binName}-runner.cjs`);
+      await writeFile(runner, script);
+      await writeFile(
+        path.join(dir, `${binName}.cmd`),
+        `@echo off\r\nnode "${runner}" %*\r\n`,
+      );
+    } else {
+      const bin = path.join(dir, binName);
+      await writeFile(bin, `#!/usr/bin/env node\n${script}`);
+      await chmod(bin, 0o755);
+    }
+    process.env.PATH = `${dir}${path.delimiter}${oldPath ?? ''}`;
+    return await run();
+  } finally {
+    if (oldPath === undefined) {
+      delete process.env.PATH;
+    } else {
+      process.env.PATH = oldPath;
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+async function runCli(
+  args: string[],
+  options: { timeout?: number } = {},
+): Promise<{ stdout: string; stderr: string }> {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    OD_DAEMON_URL: baseUrl,
+  };
+  delete env.NODE_OPTIONS;
+  return await execFileP(process.execPath, [TSX_CLI, CLI_SRC, ...args], {
+    cwd: path.join(__dirname, '..'),
+    env,
+    timeout: options.timeout ?? 20_000,
+    maxBuffer: 10 * 1024 * 1024,
+  }) as { stdout: string; stderr: string };
+}
 
 async function readSseUntilSuccess(resp: Response) {
   if (!resp.body) throw new Error('install: no body');
@@ -119,8 +177,14 @@ describe('Plan §8 e2e-3 (entry slice) — headless install → project → run'
       }),
     });
     expect(runResp.status).toBe(202);
-    const runBody = (await runResp.json()) as { runId: string };
+    const runBody = (await runResp.json()) as {
+      runId: string;
+      pluginId?: string;
+      appliedPluginSnapshotId?: string;
+    };
     expect(runBody.runId).toBeTruthy();
+    expect(runBody.pluginId).toBe('sample-plugin');
+    expect(runBody.appliedPluginSnapshotId).toBe(createBody.appliedPluginSnapshotId);
 
     // 4. The run status surfaces the snapshot id so a polling client
     // can reach replay without parsing the SSE stream.
@@ -138,12 +202,202 @@ describe('Plan §8 e2e-3 (entry slice) — headless install → project → run'
     // 5. Replay reads the same snapshot row.
     const snapResp = await fetch(`${baseUrl}/api/applied-plugins/${encodeURIComponent(createBody.appliedPluginSnapshotId!)}`);
     expect(snapResp.status).toBe(200);
-    const snap = (await snapResp.json()) as { snapshotId: string; pluginId: string };
+    const snap = (await snapResp.json()) as {
+      snapshotId: string;
+      pluginId: string;
+      query?: string;
+      inputs?: Record<string, string | number | boolean>;
+    };
     expect(snap.snapshotId).toBe(createBody.appliedPluginSnapshotId);
     expect(snap.pluginId).toBe('sample-plugin');
+    expect(snap.query).toBe('Generate a {{topic}} brief for {{audience}}.');
+    expect(snap.inputs).toEqual({ audience: 'general', topic: 'agentic design' });
 
     // Cancel the run so the test cleans up the in-memory child path.
     await fetch(`${baseUrl}/api/runs/${encodeURIComponent(runBody.runId)}/cancel`, { method: 'POST' });
+  });
+
+  it('creates a share project for publishing a user plugin to GitHub', async () => {
+    const installResp = await fetch(`${baseUrl}/api/plugins/install`, {
+      method:  'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+      body:    JSON.stringify({ source: FIXTURE_DIR }),
+    });
+    expect(installResp.status).toBe(200);
+    const installSuccess = await readSseUntilSuccess(installResp);
+    expect(installSuccess?.plugin?.id).toBe('sample-plugin');
+
+    const shareResp = await fetch(`${baseUrl}/api/plugins/sample-plugin/share-project`, {
+      method:  'POST',
+      headers: { 'content-type': 'application/json' },
+      body:    JSON.stringify({ action: 'publish-github', locale: 'en' }),
+    });
+    expect(shareResp.status).toBe(200);
+    const shareBody = (await shareResp.json()) as {
+      ok: boolean;
+      project: { id: string; pendingPrompt?: string };
+      conversationId: string;
+      appliedPluginSnapshotId?: string;
+      actionPluginId: string;
+      sourcePluginId: string;
+      stagedPath: string;
+      prompt: string;
+    };
+    expect(shareBody.ok).toBe(true);
+    expect(shareBody.actionPluginId).toBe('od-plugin-publish-github');
+    expect(shareBody.sourcePluginId).toBe('sample-plugin');
+    expect(shareBody.appliedPluginSnapshotId).toBeTruthy();
+    expect(shareBody.stagedPath).toBe('plugin-source/sample-plugin');
+    expect(shareBody.prompt).toContain('Publish the local Open Design plugin');
+    expect(shareBody.prompt).toContain('gh');
+    expect(shareBody.project.pendingPrompt).toBe(shareBody.prompt);
+
+    const filesResp = await fetch(
+      `${baseUrl}/api/projects/${encodeURIComponent(shareBody.project.id)}/files`,
+    );
+    expect(filesResp.status).toBe(200);
+    const filesBody = (await filesResp.json()) as { files: Array<{ name: string }> };
+    const fileNames = filesBody.files.map((file) => file.name).sort();
+    expect(fileNames).toContain('plugin-source/sample-plugin/open-design.json');
+    expect(fileNames).toContain('plugin-source/sample-plugin/SKILL.md');
+
+    const snapshotResp = await fetch(
+      `${baseUrl}/api/applied-plugins/${encodeURIComponent(shareBody.appliedPluginSnapshotId!)}`,
+    );
+    expect(snapshotResp.status).toBe(200);
+    const snapshot = (await snapshotResp.json()) as {
+      pluginId: string;
+      inputs?: Record<string, string | number | boolean>;
+    };
+    expect(snapshot.pluginId).toBe('od-plugin-publish-github');
+    expect(snapshot.inputs).toMatchObject({
+      source_plugin_id: 'sample-plugin',
+      plugin_context_path: 'plugin-source/sample-plugin',
+    });
+  });
+
+  it('runs the CLI install → project create → plugin run path with query and local SKILL.md in the agent prompt', async () => {
+    const pluginRoot = await mkdtemp(path.join(tmpdir(), 'od-headless-cli-plugin-'));
+    const pluginId = `headless-cli-plugin-${randomUUID().slice(0, 8)}`;
+    const fixture = path.join(pluginRoot, pluginId);
+    await mkdir(fixture, { recursive: true });
+    await writeFile(
+      path.join(fixture, 'open-design.json'),
+      JSON.stringify({
+        $schema: 'https://open-design.ai/schemas/plugin.v1.json',
+        name: pluginId,
+        title: 'Headless CLI Plugin',
+        version: '1.0.0',
+        description: 'Fixture that binds a local SKILL.md for headless CLI tests.',
+        license: 'MIT',
+        od: {
+          kind: 'skill',
+          taskKind: 'new-generation',
+          useCase: { query: 'Generate a {{topic}} brief for {{audience}}.' },
+          context: {
+            skills: [{ path: './SKILL.md' }],
+            atoms: ['todo-write', 'discovery-question-form'],
+          },
+          inputs: [
+            { name: 'topic', type: 'string', required: true, label: 'Topic' },
+            { name: 'audience', type: 'string', default: 'general', label: 'Audience' },
+          ],
+          capabilities: ['prompt:inject'],
+        },
+      }, null, 2),
+    );
+    await writeFile(
+      path.join(fixture, 'SKILL.md'),
+      [
+        '---',
+        `name: ${pluginId}`,
+        'description: Local skill loaded by the headless CLI e2e test.',
+        '---',
+        '# Headless Local Skill',
+        '',
+        'Follow this local skill during headless runs.',
+      ].join('\n'),
+    );
+
+    try {
+      const install = await runCli(['plugin', 'install', fixture]);
+      expect(install.stdout).toContain('[install] ok');
+
+      const topic = `headless cli ${randomUUID().slice(0, 8)}`;
+      const created = await runCli([
+        'project',
+        'create',
+        '--name',
+        'CLI headless plugin run',
+        '--plugin',
+        pluginId,
+        '--inputs',
+        JSON.stringify({ topic }),
+        '--json',
+      ]);
+      const createBody = JSON.parse(created.stdout) as {
+        project: { id: string };
+        appliedPluginSnapshotId?: string;
+      };
+      expect(createBody.appliedPluginSnapshotId).toBeTruthy();
+
+      const captureRoot = await mkdtemp(path.join(tmpdir(), 'od-headless-cli-capture-'));
+      const capturePath = path.join(captureRoot, 'prompt.txt');
+      const previousCapture = process.env.OD_PROMPT_CAPTURE;
+      process.env.OD_PROMPT_CAPTURE = capturePath;
+      try {
+        await withFakeAgent(
+          'opencode',
+          `
+const fs = require('node:fs');
+let input = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (chunk) => { input += chunk; });
+process.stdin.on('end', () => {
+  fs.writeFileSync(process.env.OD_PROMPT_CAPTURE, input);
+  console.log(JSON.stringify({ type: 'text', part: { text: 'headless-ok' } }));
+});
+`,
+          async () => {
+            const run = await runCli([
+              'plugin',
+              'run',
+              pluginId,
+              '--project',
+              createBody.project.id,
+              '--inputs',
+              JSON.stringify({ topic }),
+              '--agent',
+              'opencode',
+              '--follow',
+            ]);
+            expect(run.stdout).toContain('[run] started run');
+            expect(run.stdout).toContain('"event":"agent"');
+            expect(run.stdout).toContain('headless-ok');
+            expect(run.stdout).toContain('"event":"end"');
+            expect(run.stdout).toContain('"status":"succeeded"');
+          },
+        );
+
+        const prompt = await readFile(capturePath, 'utf8');
+        expect(prompt).toContain('# Headless Local Skill');
+        expect(prompt).toContain('Follow this local skill during headless runs.');
+        expect(prompt).toContain('## Active plugin');
+        expect(prompt).toContain('The plugin\'s example brief is: _Generate a {{topic}} brief for {{audience}}._');
+        expect(prompt).toContain(`- **topic**: ${topic}`);
+        expect(prompt).toContain('- **audience**: general');
+        expect(prompt).toContain(`# User request\n\nGenerate a ${topic} brief for general.`);
+      } finally {
+        if (previousCapture === undefined) {
+          delete process.env.OD_PROMPT_CAPTURE;
+        } else {
+          process.env.OD_PROMPT_CAPTURE = previousCapture;
+        }
+        await rm(captureRoot, { recursive: true, force: true });
+      }
+    } finally {
+      await rm(pluginRoot, { recursive: true, force: true });
+    }
   });
 
   // Full §8 e2e-3 contract — once the pipeline runner fires on a run

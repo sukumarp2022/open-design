@@ -730,7 +730,8 @@
   z-index: 3;
 }
 .plugins-home__card:hover .plugins-home__card-overlay,
-.plugins-home__card:focus-within .plugins-home__card-overlay {
+.plugins-home__card:focus-within .plugins-home__card-overlay,
+.plugins-home__card--shareable .plugins-home__card-overlay {
   opacity: 1;
   pointer-events: auto;
 }
@@ -793,8 +794,18 @@
 }
 .plugins-home__overlay-actions {
   display: flex;
+  flex-direction: column;
   gap: 6px;
   margin-top: 10px;
+}
+.plugins-home__overlay-actions-main,
+.plugins-home__share-actions {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.plugins-home__share-actions {
+  width: 100%;
 }
 
 /* ---------- Resting metadata foot ----------
@@ -875,6 +886,16 @@
   transition: background-color 120ms ease, border-color 120ms ease,
     color 120ms ease;
 }
+.plugins-home__action--compact {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 8px;
+}
+.plugins-home__action--compact span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .plugins-home__action--primary {
   flex: 1;
   background: white;
@@ -899,6 +920,10 @@
 .plugins-home__action--secondary:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.24);
   border-color: rgba(255, 255, 255, 0.48);
+}
+.plugins-home__action--secondary:disabled {
+  opacity: 0.55;
+  cursor: progress;
 }
 
 /* Touch/coarse-pointer fallback — overlays should be visible

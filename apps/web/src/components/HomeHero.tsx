@@ -241,6 +241,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
           activeChipId={activeChipId}
           pendingChipId={pendingChipId}
           pendingPluginId={pendingPluginId}
+          pluginsLoading={pluginsLoading}
           onPickChip={onPickChip}
         />
         <span className="home-hero__rail-divider" aria-hidden />
@@ -249,6 +250,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
           activeChipId={activeChipId}
           pendingChipId={pendingChipId}
           pendingPluginId={pendingPluginId}
+          pluginsLoading={pluginsLoading}
           onPickChip={onPickChip}
         />
       </div>
@@ -299,6 +301,7 @@ interface RailGroupProps {
   activeChipId: string | null;
   pendingChipId: string | null;
   pendingPluginId: string | null;
+  pluginsLoading: boolean;
   onPickChip: (chip: HomeHeroChip) => void;
 }
 
@@ -307,6 +310,7 @@ function RailGroup({
   activeChipId,
   pendingChipId,
   pendingPluginId,
+  pluginsLoading,
   onPickChip,
 }: RailGroupProps) {
   const chips = useMemo(() => chipsForGroup(group), [group]);
@@ -329,7 +333,7 @@ function RailGroup({
             data-chip-id={chip.id}
             data-testid={`home-hero-rail-${chip.id}`}
             onClick={() => onPickChip(chip)}
-            disabled={isPending || pendingPluginId !== null}
+            disabled={pluginsLoading || isPending || pendingPluginId !== null}
             aria-pressed={isActive}
             title={chip.hint ?? chip.label}
           >

@@ -129,6 +129,9 @@ export interface CreateProjectRequest {
   designSystemId?: string | null;
   pendingPrompt?: string;
   metadata?: ProjectMetadata;
+  pluginId?: string;
+  appliedPluginSnapshotId?: string;
+  pluginInputs?: Record<string, unknown>;
 }
 
 export interface UpdateProjectRequest {
@@ -149,6 +152,7 @@ export interface ProjectResponse {
 
 export interface CreateProjectResponse extends ProjectResponse {
   conversationId?: string;
+  appliedPluginSnapshotId?: string;
 }
 
 // POST /api/import/folder — create a project rooted at an existing local

@@ -74,6 +74,10 @@ const PLUGIN_STRING_FLAGS = new Set([
   'source',
   'inputs',
   'project',
+  'conversation',
+  'message',
+  'agent',
+  'model',
   'snapshot-id',
   'capabilities',
   'grant-caps',
@@ -128,6 +132,25 @@ const DAEMON_BOOLEAN_FLAGS = new Set([
 ]);
 const LIBRARY_STRING_FLAGS = new Set(['daemon-url', 'query', 'tag']);
 const LIBRARY_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+const PROJECT_STRING_FLAGS = new Set([
+  'daemon-url', 'name', 'skill', 'design-system', 'plugin', 'metadata-json',
+  'pending-prompt', 'project', 'conversation', 'message', 'path', 'as',
+  'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps',
+]);
+const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow']);
+const RECOVERABLE_EXIT_CODES = {
+  'daemon-not-running':       64,
+  'plugin-not-found':         65,
+  'snapshot-not-found':       65,
+  'capabilities-required':    66,
+  'missing-input':            67,
+  'project-not-found':        68,
+  'run-not-found':            69,
+  'provider-not-configured':  70,
+  'plugin-requires-daemon':   71,
+  'snapshot-stale':           72,
+  'genui-surface-awaiting':   73,
+};
 const PLUGIN_LIST_FILTER_FLAGS = new Set([
   ...PLUGIN_STRING_FLAGS,
   'task-kind', 'mode', 'tag', 'trust',
@@ -808,20 +831,6 @@ must be running locally for tool calls to succeed.`);
 // code + a JSON envelope on stderr. Code agents read these to decide
 // whether the failure is recoverable (re-grant capabilities, prompt
 // the user, retry with --grant-caps, etc.).
-const RECOVERABLE_EXIT_CODES = {
-  'daemon-not-running':       64,
-  'plugin-not-found':         65,
-  'snapshot-not-found':       65,
-  'capabilities-required':    66,
-  'missing-input':            67,
-  'project-not-found':        68,
-  'run-not-found':            69,
-  'provider-not-configured':  70,
-  'plugin-requires-daemon':   71,
-  'snapshot-stale':           72,
-  'genui-surface-awaiting':   73,
-};
-
 function exitWithStructuredError({ code, message, data }) {
   const exit = RECOVERABLE_EXIT_CODES[code] ?? 1;
   const envelope = { error: { code, message, data: data ?? {} } };
@@ -1446,8 +1455,7 @@ async function runPluginSnapshots(args) {
 
 // Plan §3.B3: `od plugin run <id>` shorthand. Today this is a thin
 // wrapper around `od plugin apply` + `POST /api/runs` so a code agent
-// can drive the apply→start→follow loop without two hops. Phase 4
-// adds full ND-JSON event streaming through `od run watch`.
+// can drive the apply→start→follow loop without two hops.
 async function runPluginRun(rest) {
   const flags = parseFlags(rest, { string: PLUGIN_STRING_FLAGS, boolean: PLUGIN_BOOLEAN_FLAGS });
   const id = rest.find((a) => !a.startsWith('-')
@@ -1455,11 +1463,15 @@ async function runPluginRun(rest) {
     && a !== flags.source
     && a !== flags.inputs
     && a !== flags.project
+    && a !== flags.conversation
+    && a !== flags.message
+    && a !== flags.agent
+    && a !== flags.model
     && a !== flags['snapshot-id']
     && a !== flags.capabilities
     && a !== flags['grant-caps']);
   if (!id) {
-    console.error('Usage: od plugin run <id> --project <projectId> [--inputs <json>] [--grant-caps a,b]');
+    console.error('Usage: od plugin run <id> --project <projectId> [--inputs <json>] [--agent <id>] [--message "<text>"] [--grant-caps a,b] [--follow]');
     process.exit(2);
   }
   if (!flags.project) {
@@ -1492,6 +1504,11 @@ async function runPluginRun(rest) {
       pluginId:         id,
       pluginInputs:     inputs,
       grantCaps,
+      ...(flags.conversation ? { conversationId: flags.conversation } : {}),
+      ...(flags.message ? { message: flags.message } : {}),
+      ...(flags.agent ? { agentId: flags.agent } : {}),
+      ...(flags.model ? { model: flags.model } : {}),
+      ...(flags['snapshot-id'] ? { appliedPluginSnapshotId: flags['snapshot-id'] } : {}),
     }),
   });
   const runData = await runResp.json().catch(() => ({}));
@@ -1507,11 +1524,12 @@ async function runPluginRun(rest) {
   }
   if (flags.json) {
     process.stdout.write(JSON.stringify({ apply: applyData, run: runData }, null, 2) + '\n');
+    if (flags.follow) await streamRunEvents(base, runData.runId);
     return;
   }
-  console.log(`[run] started run ${runData.runId} (snapshot ${applyData?.appliedPlugin?.snapshotId ?? 'n/a'})`);
+  console.log(`[run] started run ${runData.runId} (snapshot ${runData.appliedPluginSnapshotId ?? applyData?.appliedPlugin?.snapshotId ?? 'n/a'})`);
   if (flags.follow) {
-    console.log(`[run] follow stream: GET ${base}/api/runs/${runData.runId}/events`);
+    await streamRunEvents(base, runData.runId);
   }
 }
 
@@ -3161,13 +3179,6 @@ sources arrive in Phase 2A. The marketplace surface comes in Phase 4.`);
 function projectDaemonUrl(flags) {
   return (flags && flags['daemon-url']) || process.env.OD_DAEMON_URL || 'http://127.0.0.1:7456';
 }
-
-const PROJECT_STRING_FLAGS = new Set([
-  'daemon-url', 'name', 'skill', 'design-system', 'plugin', 'metadata-json',
-  'pending-prompt', 'project', 'conversation', 'message', 'path', 'as',
-  'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps',
-]);
-const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow']);
 
 function safeReadJsonFile(p) {
   try {

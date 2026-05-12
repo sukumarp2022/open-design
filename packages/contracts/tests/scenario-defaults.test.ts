@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SCENARIO_PLUGIN_BY_KIND,
   DEFAULT_SCENARIO_PLUGIN_BY_TASK_KIND,
+  DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
   defaultScenarioPluginIdForKind,
   defaultScenarioPluginIdForTaskKind,
 } from '../src/plugins/scenario-defaults.js';
@@ -30,6 +31,11 @@ describe('defaultScenarioPluginIdForKind', () => {
 
   it('returns null for an undefined kind so the daemon can skip the fallback', () => {
     expect(defaultScenarioPluginIdForKind(undefined)).toBeNull();
+  });
+
+  it('exposes the hidden free-form Home fallback plugin separately from kind defaults', () => {
+    expect(DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID).toBe('od-default');
+    expect(DEFAULT_SCENARIO_PLUGIN_BY_KIND.other).toBe('od-new-generation');
   });
 });
 

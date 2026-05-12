@@ -32,6 +32,7 @@ const CANONICAL = new Map<string, { taskKind: string; pipelineStages: string[] }
 // starters sit here too: they are user-facing plugins for downstream
 // handoff, but they must not become the canonical tune-collab fallback.
 const SIBLINGS = new Map<string, { taskKind: string }>([
+  ['od-default',          { taskKind: 'new-generation' }],
   ['od-media-generation', { taskKind: 'new-generation' }],
   ['od-plugin-authoring', { taskKind: 'new-generation' }],
   ['od-design-refine',    { taskKind: 'tune-collab' }],
@@ -81,4 +82,20 @@ describe('plugins/_official/scenarios roster', () => {
       expect(folder).not.toBe(`od-${expected.taskKind}`);
     });
   }
+
+  it('od-default is hidden and asks for task type through a GenUI surface', async () => {
+    const manifestPath = path.join(scenariosRoot, 'od-default', 'open-design.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    expect(manifest.od.hidden).toBe(true);
+    expect(manifest.od.pipeline.stages[0].id).toBe('task-type');
+    expect(manifest.od.genui.surfaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'task-type',
+          kind: 'choice',
+          trigger: expect.objectContaining({ stageId: 'task-type' }),
+        }),
+      ]),
+    );
+  });
 });

@@ -49,6 +49,10 @@ import { NewProjectModal } from './NewProjectModal';
 import { PluginsView } from './PluginsView';
 import type { CreateInput } from './NewProjectPanel';
 import type { PluginLoopSubmit } from './PluginLoopHome';
+import type {
+  PluginShareAction,
+  PluginShareProjectOutcome,
+} from '../state/projects';
 import { TasksView } from './TasksView';
 
 // The topbar chips (GitHub star, model switcher, Use everywhere)
@@ -168,9 +172,15 @@ interface Props {
       pendingPrompt?: string;
       pluginId?: string;
       appliedPluginSnapshotId?: string;
+      pluginInputs?: Record<string, unknown>;
       autoSendFirstMessage?: boolean;
     },
   ) => void;
+  onCreatePluginShareProject: (
+    pluginId: string,
+    action: PluginShareAction,
+    locale?: string,
+  ) => Promise<PluginShareProjectOutcome>;
   onImportClaudeDesign: (file: File) => Promise<void> | void;
   onImportFolder?: (baseDir: string) => Promise<void> | void;
   onOpenProject: (id: string) => void;
@@ -219,6 +229,7 @@ export function EntryShell({
   onApiModelChange,
   onThemeChange,
   onCreateProject,
+  onCreatePluginShareProject,
   onImportClaudeDesign,
   onImportFolder,
   onOpenProject,
@@ -306,11 +317,11 @@ export function EntryShell({
   // message so the user lands inside a running pipeline.
   //
   // Stage B of plugin-driven-flow-plan: the rail can stamp a
-  // `projectKind` on the payload so the daemon-side default binding
-  // resolves to the matching scenario plugin (image / video / audio
-  // → od-media-generation, etc.). When the chip carried no kind we
-  // keep the historical 'prototype' default so legacy callers behave
-  // as before.
+  // `projectKind` on the payload so the created project records the
+  // chosen surface (image / video / audio, etc.). Free-form Home
+  // submits now arrive with the hidden od-default router plugin and
+  // projectKind='other', so the agent asks for the exact task type
+  // before continuing.
   function handlePluginLoopSubmit(payload: PluginLoopSubmit) {
     const head = payload.prompt.trim().split(/\s+/).slice(0, 8).join(' ');
     const fallbackName = head.length > 0 ? head : 'Untitled';
@@ -702,7 +713,10 @@ export function EntryShell({
               />
             ) : null}
             {view === 'plugins' ? (
-              <PluginsView onCreatePlugin={startPluginAuthoring} />
+              <PluginsView
+                onCreatePlugin={startPluginAuthoring}
+                onCreatePluginShareProject={onCreatePluginShareProject}
+              />
             ) : null}
             {view === 'design-systems' ? (
               designSystemsLoading ? (

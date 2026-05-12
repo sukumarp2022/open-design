@@ -21,12 +21,16 @@ export type TaskKind = AppliedPluginSnapshot['taskKind'];
 // string-literal union so a typo here surfaces as a type error in both
 // the web shell and the daemon resolver.
 export type DefaultScenarioPluginId =
+  | 'od-default'
   | 'od-new-generation'
   | 'od-media-generation'
   | 'od-plugin-authoring'
   | 'od-figma-migration'
   | 'od-code-migration'
   | 'od-tune-collab';
+
+export const DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID =
+  'od-default' satisfies DefaultScenarioPluginId;
 
 export const DEFAULT_SCENARIO_PLUGIN_BY_KIND: Record<ProjectKind, DefaultScenarioPluginId> = {
   prototype: 'od-new-generation',

@@ -8,10 +8,12 @@
 import type {
   AppliedPluginSnapshot,
   ApplyResult,
+  CreatePluginShareProjectResponse,
   ImportFolderRequest,
   ImportFolderResponse,
   InstalledPluginRecord,
   PluginInstallOutcome,
+  PluginShareAction,
   ProjectPluginFolderInstallRequest,
 } from '@open-design/contracts';
 import { randomUUID } from '../utils/uuid';
@@ -25,6 +27,7 @@ import type {
 } from '../types';
 
 export type { PluginInstallOutcome } from '@open-design/contracts';
+export type { PluginShareAction } from '@open-design/contracts';
 
 export async function listProjects(): Promise<Project[]> {
   try {
@@ -364,10 +367,15 @@ export async function listPlugins(): Promise<InstalledPluginRecord[]> {
     const resp = await fetch('/api/plugins');
     if (!resp.ok) return [];
     const json = (await resp.json()) as { plugins?: InstalledPluginRecord[] };
-    return json.plugins ?? [];
+    return (json.plugins ?? []).filter(isVisiblePlugin);
   } catch {
     return [];
   }
+}
+
+export function isVisiblePlugin(plugin: InstalledPluginRecord): boolean {
+  const od = (plugin.manifest?.od ?? {}) as Record<string, unknown>;
+  return od.hidden !== true;
 }
 
 interface PluginInstallEvent {
@@ -490,6 +498,59 @@ export async function contributeGeneratedPluginToOpenDesign(
   relativePath: string,
 ): Promise<PluginShareOutcome> {
   return postGeneratedPluginShareAction(projectId, relativePath, 'contribute-open-design');
+}
+
+export type PluginShareProjectOutcome =
+  | (CreatePluginShareProjectResponse & { ok: true })
+  | {
+      ok: false;
+      message: string;
+      code?: string;
+    };
+
+export async function createPluginShareProject(
+  pluginId: string,
+  action: PluginShareAction,
+  locale?: string,
+): Promise<PluginShareProjectOutcome> {
+  try {
+    const resp = await fetch(
+      `/api/plugins/${encodeURIComponent(pluginId)}/share-project`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          ...(locale ? { locale } : {}),
+        }),
+      },
+    );
+    const body = (await resp.json().catch(() => null)) as
+      | (Partial<CreatePluginShareProjectResponse> & {
+          error?: string | { code?: string; message?: string };
+          code?: string;
+        })
+      | null;
+    if (resp.ok && body?.ok && body.project && body.conversationId) {
+      return body as CreatePluginShareProjectResponse & { ok: true };
+    }
+    const errorMessage =
+      typeof body?.error === 'string' ? body.error : body?.error?.message;
+    const fallbackMessage = resp.statusText || 'Could not create plugin share project.';
+    const message = body?.message ?? errorMessage ?? fallbackMessage;
+    const code =
+      body?.code ?? (typeof body?.error === 'object' ? body.error.code : undefined);
+    return {
+      ok: false,
+      message,
+      ...(code ? { code } : {}),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: (err as Error).message,
+    };
+  }
 }
 
 async function postGeneratedPluginShareAction(

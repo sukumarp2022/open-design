@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyPlugin,
   contributeGeneratedPluginToOpenDesign,
+  createPluginShareProject,
   installGeneratedPluginFolder,
+  listPlugins,
   publishGeneratedPluginToGitHub,
 } from '../../src/state/projects';
 
@@ -53,6 +55,33 @@ describe('applyPlugin', () => {
       grantCaps: [],
       locale: 'zh-CN',
     });
+  });
+});
+
+describe('listPlugins', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('hides plugins marked od.hidden from UI-facing lists', async () => {
+    const visible = {
+      id: 'od-new-generation',
+      title: 'New generation',
+      manifest: { od: { kind: 'scenario' } },
+    };
+    const hidden = {
+      id: 'od-default',
+      title: 'Default design router',
+      manifest: { od: { kind: 'scenario', hidden: true } },
+    };
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => new Response(
+      JSON.stringify({ plugins: [hidden, visible] }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )));
+
+    const rows = await listPlugins();
+
+    expect(rows.map((row) => row.id)).toEqual(['od-new-generation']);
   });
 });
 
@@ -150,5 +179,81 @@ describe('generated plugin share actions', () => {
         body: JSON.stringify({ path: 'generated-plugin' }),
       }),
     );
+  });
+});
+
+describe('createPluginShareProject', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('creates an agent-backed share project for an installed plugin', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(
+      JSON.stringify({
+        ok: true,
+        project: {
+          id: 'project-1',
+          name: 'Publish to GitHub: Sample Plugin',
+          skillId: null,
+          designSystemId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          pendingPrompt: 'Publish it',
+          metadata: { kind: 'prototype' },
+        },
+        conversationId: 'conversation-1',
+        appliedPluginSnapshotId: 'snapshot-1',
+        actionPluginId: 'od-plugin-publish-github',
+        sourcePluginId: 'sample-plugin',
+        stagedPath: 'plugin-source/sample-plugin',
+        prompt: 'Publish it',
+        message: 'Created a Publish to GitHub task.',
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const outcome = await createPluginShareProject(
+      'sample-plugin',
+      'publish-github',
+      'zh-CN',
+    );
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      project: { id: 'project-1' },
+      appliedPluginSnapshotId: 'snapshot-1',
+      stagedPath: 'plugin-source/sample-plugin',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/plugins/sample-plugin/share-project',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ action: 'publish-github', locale: 'zh-CN' }),
+      }),
+    );
+  });
+
+  it('surfaces share project errors from the daemon', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(
+      JSON.stringify({
+        ok: false,
+        code: 'share-action-plugin-missing',
+        message: 'Restart the daemon.',
+      }),
+      { status: 409, headers: { 'content-type': 'application/json' } },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const outcome = await createPluginShareProject(
+      'sample-plugin',
+      'contribute-open-design',
+    );
+
+    expect(outcome).toEqual({
+      ok: false,
+      code: 'share-action-plugin-missing',
+      message: 'Restart the daemon.',
+    });
   });
 });

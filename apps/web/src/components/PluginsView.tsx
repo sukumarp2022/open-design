@@ -6,6 +6,8 @@ import {
   listPluginMarketplaces,
   listPlugins,
   type PluginInstallOutcome,
+  type PluginShareAction,
+  type PluginShareProjectOutcome,
   type PluginMarketplace,
   uploadPluginFolder,
   uploadPluginZip,
@@ -38,7 +40,19 @@ const PLUGINS_TABS: ReadonlyArray<{
   { id: 'team', label: 'Team / Enterprise', hint: 'Coming soon' },
 ];
 
-export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: (goal?: string) => void }) {
+interface PluginsViewProps {
+  onCreatePlugin?: (goal?: string) => void;
+  onCreatePluginShareProject?: (
+    pluginId: string,
+    action: PluginShareAction,
+    locale?: string,
+  ) => Promise<PluginShareProjectOutcome>;
+}
+
+export function PluginsView({
+  onCreatePlugin,
+  onCreatePluginShareProject,
+}: PluginsViewProps) {
   const { locale } = useI18n();
   const [plugins, setPlugins] = useState<InstalledPluginRecord[]>([]);
   const [marketplaces, setMarketplaces] = useState<PluginMarketplace[]>([]);
@@ -46,6 +60,10 @@ export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: (goal?: strin
   const [activeTab, setActiveTab] = useState<PluginsTab>('community');
   const [importOpen, setImportOpen] = useState(false);
   const [pendingApplyId, setPendingApplyId] = useState<string | null>(null);
+  const [pendingShareAction, setPendingShareAction] = useState<{
+    pluginId: string;
+    action: PluginShareAction;
+  } | null>(null);
   const [activePlugin, setActivePlugin] = useState<{
     record: InstalledPluginRecord;
     result: ApplyResult;
@@ -106,6 +124,29 @@ export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: (goal?: strin
       ok: true,
       message: `${record.title} is ready. Use it from Home with @ search or pick it from the gallery.`,
     });
+  }
+
+  async function handleCreatePluginShareTask(
+    record: InstalledPluginRecord,
+    action: PluginShareAction,
+  ) {
+    if (!onCreatePluginShareProject) {
+      setNotice({
+        ok: false,
+        message: 'Plugin sharing is not available in this shell.',
+      });
+      return;
+    }
+    setPendingShareAction({ pluginId: record.id, action });
+    setNotice(null);
+    const outcome = await onCreatePluginShareProject(record.id, action, locale);
+    setPendingShareAction(null);
+    if (!outcome.ok) {
+      setNotice({
+        ok: false,
+        message: outcome.message,
+      });
+    }
   }
 
   return (
@@ -195,6 +236,7 @@ export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: (goal?: strin
             loading={false}
             activePluginId={activePlugin?.record.id ?? null}
             pendingApplyId={pendingApplyId}
+            pendingShareAction={pendingShareAction}
             onUse={(record) => void handleUsePlugin(record)}
             onOpenDetails={setDetailsRecord}
             onCreatePlugin={onCreatePlugin}
@@ -210,8 +252,12 @@ export function PluginsView({ onCreatePlugin }: { onCreatePlugin?: (goal?: strin
             loading={false}
             activePluginId={activePlugin?.record.id ?? null}
             pendingApplyId={pendingApplyId}
+            pendingShareAction={pendingShareAction}
             onUse={(record) => void handleUsePlugin(record)}
             onOpenDetails={setDetailsRecord}
+            onPluginShareAction={(record, action) =>
+              void handleCreatePluginShareTask(record, action)
+            }
             onCreatePlugin={onCreatePlugin}
             title="My plugins"
             subtitle="Your imported workflow plugins. Tag them by intent so they appear beside the official Import, Create, Export, Refine, and Extend starters."

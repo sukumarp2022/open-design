@@ -46,6 +46,23 @@ const DEFAULT_PLUGIN = {
   },
 };
 
+const HIDDEN_DEFAULT_PLUGIN = {
+  ...DEFAULT_PLUGIN,
+  id: 'od-default',
+  title: 'Default design router',
+  source: '/tmp/default-router',
+  fsPath: '/tmp/default-router',
+  manifest: {
+    ...DEFAULT_PLUGIN.manifest,
+    name: 'od-default',
+    title: 'Default design router',
+    od: {
+      ...DEFAULT_PLUGIN.manifest.od,
+      hidden: true,
+    },
+  },
+};
+
 const AUTHORING_APPLY_RESULT = {
   query: 'Create a plugin.',
   contextItems: [],
@@ -162,6 +179,42 @@ describe('HomeView prompt handoff', () => {
       expect(document.activeElement).toBe(input);
     });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('routes free-form submits through the hidden default plugin without applying a visible chip', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      if (typeof url === 'string' && url === '/api/plugins') {
+        return new Response(JSON.stringify({ plugins: [HIDDEN_DEFAULT_PLUGIN, DEFAULT_PLUGIN] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onSubmit = vi.fn();
+
+    render(
+      <HomeView
+        projects={[]}
+        onSubmit={onSubmit}
+        onOpenProject={() => undefined}
+        onViewAllProjects={() => undefined}
+      />,
+    );
+
+    const input = await screen.findByTestId('home-hero-input');
+    fireEvent.change(input, { target: { value: 'Make a launch page for a robotics studio' } });
+    fireEvent.click(screen.getByTestId('home-hero-submit'));
+
+    expect(screen.queryByTestId('home-hero-active-plugin')).toBeNull();
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: 'Make a launch page for a robotics studio',
+      pluginId: 'od-default',
+      appliedPluginSnapshotId: null,
+      pluginInputs: { prompt: 'Make a launch page for a robotics studio' },
+      projectKind: 'other',
+    }));
   });
 
   it('falls back to od-new-generation when od-plugin-authoring is not registered yet', async () => {

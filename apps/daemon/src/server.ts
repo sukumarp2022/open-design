@@ -11,7 +11,10 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
-import { defaultScenarioPluginIdForKind } from '@open-design/contracts';
+import {
+  defaultScenarioPluginIdForKind,
+  PLUGIN_SHARE_ACTION_PLUGIN_IDS,
+} from '@open-design/contracts';
 import {
   composeSystemPrompt,
   renderCodexImagegenOverride,
@@ -305,6 +308,16 @@ export function composeLiveInstructionPrompt({
     parts.push(override);
   }
   return parts.join('\n\n---\n\n');
+}
+
+function renderPluginBriefTemplate(template, inputs = {}) {
+  if (typeof template !== 'string' || template.length === 0) return '';
+  return template.replace(/\{\{\s*([a-zA-Z_][\w-]*)\s*\}\}/g, (full, key) => {
+    if (!Object.hasOwn(inputs, key)) return full;
+    const value = inputs[key];
+    if (value === undefined || value === null || value === '') return full;
+    return String(value);
+  });
 }
 
 export function resolveResearchCommandContract(research, message) {
@@ -1154,6 +1167,111 @@ function githubRepoNameFromPluginName(name) {
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/(^[-._]+|[-._]+$)/g, '');
   return slug || 'open-design-plugin';
+}
+
+const PLUGIN_SHARE_ACTION_LABELS = {
+  'publish-github': 'Publish to GitHub',
+  'contribute-open-design': 'Contribute to Open Design',
+};
+
+const USER_PLUGIN_SOURCE_KINDS = new Set([
+  'user',
+  'project',
+  'marketplace',
+  'github',
+  'url',
+  'local',
+]);
+
+const PLUGIN_CONTEXT_SKIP_DIRS = new Set([
+  '.git',
+  '.next',
+  '.nuxt',
+  '.od',
+  '.output',
+  '.tmp',
+  '.turbo',
+  '.venv',
+  '__pycache__',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out',
+  'target',
+  'vendor',
+]);
+
+const PLUGIN_CONTEXT_SKIP_FILES = new Set([
+  '.DS_Store',
+  'Thumbs.db',
+]);
+
+function normalizePluginShareAction(input) {
+  const value = typeof input === 'string' ? input.trim() : '';
+  return Object.prototype.hasOwnProperty.call(PLUGIN_SHARE_ACTION_PLUGIN_IDS, value)
+    ? value
+    : null;
+}
+
+function renderPluginSharePrompt({ action, sourcePlugin, stagedPath }) {
+  const title = sourcePlugin.title || sourcePlugin.id;
+  if (action === 'publish-github') {
+    return [
+      `Publish the local Open Design plugin "${title}" as a new public GitHub repository.`,
+      '',
+      `The plugin source files have been copied into this project at \`${stagedPath}\`.`,
+      'Use the GitHub CLI (`gh`) for GitHub operations. Check `gh auth status` first, create a clean repository from the staged plugin folder, push the initial commit, and report the final repository URL.',
+      '',
+      'Do not rewrite the plugin unless publishing requires a small metadata fix. If you make any fix, explain it before publishing.',
+    ].join('\n');
+  }
+  return [
+    `Open a pull request to add the local Open Design plugin "${title}" to the Open Design repository.`,
+    '',
+    `The plugin source files have been copied into this project at \`${stagedPath}\`.`,
+    'Use the GitHub CLI (`gh`) for GitHub operations. Check `gh auth status` first, fork or reuse the fork of `nexu-io/open-design`, create a branch, copy the staged plugin into `plugins/community/`, push the branch, and open a PR against `nexu-io/open-design:main`.',
+    '',
+    'Keep the PR focused on this plugin. Report the PR URL and any validation you ran.',
+  ].join('\n');
+}
+
+async function copyPluginFolderForProjectContext(sourceRoot, destRoot) {
+  const rootReal = await fs.promises.realpath(sourceRoot);
+  const stat = await fs.promises.stat(rootReal);
+  if (!stat.isDirectory()) {
+    const err = new Error('plugin source path is not a directory');
+    err.code = 'ENOTDIR';
+    throw err;
+  }
+  await copyPluginContextDir(rootReal, destRoot, rootReal);
+}
+
+async function copyPluginContextDir(src, dest, rootReal) {
+  await fs.promises.mkdir(dest, { recursive: true });
+  const entries = await fs.promises.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    if (shouldSkipPluginContextEntry(entry.name)) continue;
+    if (entry.isSymbolicLink()) continue;
+
+    const from = path.join(src, entry.name);
+    const to = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      const childReal = await fs.promises.realpath(from).catch(() => null);
+      if (!childReal || (childReal !== rootReal && !childReal.startsWith(rootReal + path.sep))) {
+        continue;
+      }
+      await copyPluginContextDir(childReal, to, rootReal);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    await fs.promises.mkdir(path.dirname(to), { recursive: true });
+    await fs.promises.copyFile(from, to);
+  }
+}
+
+function shouldSkipPluginContextEntry(name) {
+  return PLUGIN_CONTEXT_SKIP_DIRS.has(name) || PLUGIN_CONTEXT_SKIP_FILES.has(name);
 }
 
 async function ensureGhReady() {
@@ -3969,6 +4087,114 @@ export async function startServer({
         return res.status(422).json({ error: 'missing_inputs', fields: err.fields });
       }
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  app.post('/api/plugins/:id/share-project', async (req, res) => {
+    try {
+      const sourcePlugin = getInstalledPlugin(db, req.params.id);
+      if (!sourcePlugin) {
+        sendApiError(res, 404, 'NOT_FOUND', 'plugin not found');
+        return;
+      }
+      if (!USER_PLUGIN_SOURCE_KINDS.has(sourcePlugin.sourceKind)) {
+        res.status(409).json({
+          ok: false,
+          code: 'plugin-not-shareable',
+          message: 'Only user-installed plugins can start a share project.',
+        });
+        return;
+      }
+
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const action = normalizePluginShareAction(body.action);
+      if (!action) {
+        sendApiError(res, 400, 'BAD_REQUEST', 'action must be publish-github or contribute-open-design');
+        return;
+      }
+      const actionPluginId = PLUGIN_SHARE_ACTION_PLUGIN_IDS[action];
+      const actionPlugin = getInstalledPlugin(db, actionPluginId);
+      if (!actionPlugin) {
+        res.status(409).json({
+          ok: false,
+          code: 'share-action-plugin-missing',
+          message: `The bundled action plugin "${actionPluginId}" is not installed. Restart the daemon so bundled plugins are registered.`,
+        });
+        return;
+      }
+
+      const now = Date.now();
+      const id = randomId();
+      const cid = randomId();
+      const sourceSlug = githubRepoNameFromPluginName(sourcePlugin.id);
+      const stagedPath = `plugin-source/${sourceSlug}`;
+      const prompt = renderPluginSharePrompt({ action, sourcePlugin, stagedPath });
+      const metadata = { kind: 'prototype' };
+      const projectRoot = await ensureProject(PROJECTS_DIR, id, metadata);
+      await copyPluginFolderForProjectContext(
+        sourcePlugin.fsPath,
+        path.join(projectRoot, 'plugin-source', sourceSlug),
+      );
+
+      insertProject(db, {
+        id,
+        name: `${PLUGIN_SHARE_ACTION_LABELS[action]}: ${sourcePlugin.title || sourcePlugin.id}`,
+        skillId: null,
+        designSystemId: null,
+        pendingPrompt: prompt,
+        metadata,
+        createdAt: now,
+        updatedAt: now,
+      });
+      insertConversation(db, {
+        id: cid,
+        projectId: id,
+        title: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const registry = await loadPluginRegistryView();
+      const resolved = resolvePluginSnapshot({
+        db,
+        body: {
+          pluginId: actionPluginId,
+          pluginInputs: {
+            source_plugin_id: sourcePlugin.id,
+            source_plugin_title: sourcePlugin.title || sourcePlugin.id,
+            source_plugin_version: sourcePlugin.version,
+            source_plugin_path: sourcePlugin.fsPath,
+            plugin_context_path: stagedPath,
+          },
+          locale: typeof body.locale === 'string' ? body.locale : undefined,
+        },
+        projectId: id,
+        conversationId: cid,
+        registry,
+      });
+      if (resolved && !resolved.ok) {
+        res.status(resolved.status).json(resolved.body);
+        return;
+      }
+
+      const project = getProject(db, id);
+      if (!project) {
+        sendApiError(res, 500, 'INTERNAL_ERROR', 'created project could not be loaded');
+        return;
+      }
+      res.json({
+        ok: true,
+        project,
+        conversationId: cid,
+        ...(resolved?.ok ? { appliedPluginSnapshotId: resolved.snapshotId } : {}),
+        actionPluginId,
+        sourcePluginId: sourcePlugin.id,
+        stagedPath,
+        prompt,
+        message: `Created a ${PLUGIN_SHARE_ACTION_LABELS[action]} task for ${sourcePlugin.title || sourcePlugin.id}.`,
+      });
+    } catch (err) {
+      res.status(400).json({ ok: false, message: String(err?.message || err) });
     }
   });
 
@@ -6867,6 +7093,21 @@ export async function startServer({
     // non-plain adapters and we'd emit the panel for a run the orchestrator
     // skips. Gating the threading itself keeps composer + orchestrator in
     // exact lockstep regardless of which side enforces eligibility.
+    let pluginBlock;
+    if (
+      typeof appliedPluginSnapshotId === 'string'
+      && appliedPluginSnapshotId.length > 0
+    ) {
+      try {
+        const snap = getSnapshot(db, appliedPluginSnapshotId);
+        if (snap) pluginBlock = pluginPromptBlock(snap);
+      } catch (err) {
+        console.warn(
+          `[plugins] pluginBlock build failed: ${err?.message ?? err}`,
+        );
+      }
+    }
+
     // Plan §3.M2 / §3.V1 / spec §23.4 — render each stage's atoms[]
     // into `## Active stage` blocks via the contracts helper when
     // the run carries a snapshot with a pipeline. Default is now ON
@@ -6918,6 +7159,7 @@ export async function startServer({
       connectedExternalMcp: Array.isArray(connectedExternalMcp)
         ? connectedExternalMcp
         : undefined,
+      ...(pluginBlock ? { pluginBlock } : {}),
       ...(activeStageBlocks ? { activeStageBlocks } : {}),
     });
     // The chat handler also needs to know where the active skill lives
@@ -8220,6 +8462,13 @@ export async function startServer({
     if (resolvedSnapshot?.ok) {
       meta.appliedPluginSnapshotId = resolvedSnapshot.snapshotId;
       if (!meta.pluginId) meta.pluginId = resolvedSnapshot.snapshot.pluginId;
+      if (typeof meta.message !== 'string' || meta.message.trim().length === 0) {
+        const renderedQuery = renderPluginBriefTemplate(
+          resolvedSnapshot.snapshot.query,
+          resolvedSnapshot.snapshot.inputs,
+        ).trim();
+        if (renderedQuery.length > 0) meta.message = renderedQuery;
+      }
     }
     const run = design.runs.create(meta);
     if (resolvedSnapshot?.ok) {
@@ -8231,7 +8480,15 @@ export async function startServer({
       }
     }
     /** @type {import('@open-design/contracts').ChatRunCreateResponse} */
-    const body = { runId: run.id };
+    const body = {
+      runId: run.id,
+      ...(resolvedSnapshot?.ok
+        ? {
+            appliedPluginSnapshotId: resolvedSnapshot.snapshotId,
+            pluginId: resolvedSnapshot.snapshot.pluginId,
+          }
+        : {}),
+    };
     res.status(202).json(body);
     // Plan §3.I1 / spec §10.1 — fire the pipeline schedule on the run's
     // SSE stream BEFORE the agent process is started. The first
@@ -8250,7 +8507,7 @@ export async function startServer({
         db,
       });
     }
-    design.runs.start(run, () => startChatRun(req.body || {}, run));
+    design.runs.start(run, () => startChatRun(meta, run));
   });
 
   app.get('/api/runs', (req, res) => {

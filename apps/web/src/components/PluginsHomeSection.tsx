@@ -16,6 +16,7 @@
 // owns layout only.
 
 import type { InstalledPluginRecord } from '@open-design/contracts';
+import type { PluginShareAction } from '../state/projects';
 import { Icon } from './Icon';
 import { PluginCard } from './plugins-home/PluginCard';
 import {
@@ -29,8 +30,13 @@ interface Props {
   loading: boolean;
   activePluginId: string | null;
   pendingApplyId: string | null;
+  pendingShareAction?: { pluginId: string; action: PluginShareAction } | null;
   onUse: (record: InstalledPluginRecord) => void;
   onOpenDetails: (record: InstalledPluginRecord) => void;
+  onPluginShareAction?: (
+    record: InstalledPluginRecord,
+    action: PluginShareAction,
+  ) => void;
   onCreatePlugin?: (goal?: string) => void;
   title?: string;
   subtitle?: string;
@@ -44,8 +50,10 @@ export function PluginsHomeSection({
   loading,
   activePluginId,
   pendingApplyId,
+  pendingShareAction = null,
   onUse,
   onOpenDetails,
+  onPluginShareAction,
   onCreatePlugin,
   title = 'Community',
   subtitle = 'Things you can do and tasks to complete — packaged as plugins. Pick one to load a starter prompt, or type freely above.',
@@ -148,9 +156,11 @@ export function PluginsHomeSection({
                   isActive={activePluginId === p.id}
                   isPending={pendingApplyId === p.id}
                   pendingAny={pendingApplyId !== null}
+                  pendingShareAction={pendingShareAction}
                   isFeatured={featuredList.some((f) => f.id === p.id)}
                   onUse={onUse}
                   onOpenDetails={onOpenDetails}
+                  onShareAction={onPluginShareAction}
                 />
               ))}
               {showContributionCard && contributionTarget ? (

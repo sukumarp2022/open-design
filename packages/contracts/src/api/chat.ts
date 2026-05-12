@@ -36,6 +36,8 @@ export type ChatRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'can
 
 export interface ChatRunCreateResponse {
   runId: string;
+  appliedPluginSnapshotId?: string;
+  pluginId?: string;
 }
 
 export interface ChatRunStatusResponse {
@@ -44,6 +46,8 @@ export interface ChatRunStatusResponse {
   conversationId: string | null;
   assistantMessageId: string | null;
   agentId: string | null;
+  appliedPluginSnapshotId?: string | null;
+  pluginId?: string | null;
   status: ChatRunStatus;
   createdAt: number;
   updatedAt: number;
