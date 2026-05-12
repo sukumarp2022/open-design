@@ -284,8 +284,68 @@
   width: 100%;
 }
 
+/* ------------------------------------------------------------
+   Stage B of plugin-driven-flow-plan: Home intent rail.
+   A horizontal chip strip below the input card mirroring the
+   NewProject taxonomy plus migration shortcuts (Figma / folder /
+   template). Clicking a chip pre-applies the matching scenario
+   plugin (or dispatches to the folder / template flow) so Enter
+   behaves the same as the explicit "Use plugin" path.
+   ------------------------------------------------------------ */
+.home-hero__rail {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  padding: 2px;
+}
+.home-hero__rail-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+.home-hero__rail-chip:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+  transform: translateY(-0.5px);
+}
+.home-hero__rail-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.home-hero__rail-chip.is-active {
+  background: var(--accent-tint);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--accent);
+}
+.home-hero__rail-chip.is-pending {
+  opacity: 0.75;
+}
+.home-hero__rail-chip-icon {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+.home-hero__rail-chip-label {
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .home-hero__title {
     font-size: 24px;
   }
+  /* Plan §B follow-up: chip rail must never require horizontal
+     scrolling. Keep `flex-wrap: wrap` from the base rule so chips
+     fall onto a second row instead of hiding behind an overflow. */
 }

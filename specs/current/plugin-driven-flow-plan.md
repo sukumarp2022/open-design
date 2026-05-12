@@ -53,6 +53,14 @@ plugin manifest (od.pipeline.stages[])
 
 ## Stages
 
+| Stage | Status | Notes |
+|---|---|---|
+| A | shipped | Plugin-local SKILL.md reaches `## Active skill`; Home query auto-binds default scenario per kind. |
+| B | shipped (MVP) | Chip rail mirrors NewProject taxonomy + adds Figma / folder / template shortcuts. Secondary chip rows (model picker for image, inline figmaUrl input) deferred. |
+| C | shipped (MVP) | Bundled `od-media-generation` scenario for image/video/audio; uses existing `media-image` / `media-video` / `media-audio` atoms rather than a new wrapper atom. |
+| D | pending | Real atom workers replacing the stub pipeline runner. |
+| E | pending | Verification gate (e2e). |
+
 ### Stage A — Plugin actually injects, Home never runs naked
 
 Smallest change with the largest stability win.
@@ -80,8 +88,11 @@ Exit criteria
 
 ### Stage C — Media + migration scenario fill-in
 
-- Add bundled scenario `od-media-generation` plus atom `media-generate` (wraps the existing `media generate` daemon CLI).
-- Surface "From Figma" / "From folder" chips: the Figma chip exposes the `figmaUrl` input inline; the folder chip opens the existing `ImportFolderModal`.
+- Add bundled scenario `od-media-generation`. The pipeline reuses the already-shipped `media-image` / `media-video` / `media-audio` atoms; no dedicated `media-generate` wrapper is needed and the original plan's mention of a separate atom is superseded by this note.
+- The scenario shares `taskKind: 'new-generation'` with `od-new-generation`. The daemon's `collectBundledScenarios` dedupes by `taskKind`, preferring the canonical `od-<taskKind>` id so the pipeline-fallback stays deterministic.
+- Surface "From Figma" / "From folder" chips on the Home rail.
+  - "From Figma" applies the `od-figma-migration` plugin (which carries the `figmaUrl` input). A dedicated inline `figmaUrl` field is deferred to a follow-up; the chip's prompt-template substitution still surfaces `{{figmaUrl}}` so the user can edit before submit.
+  - "From folder" prefers the Electron native picker (when available) and falls back to opening the existing modal-based import form.
 
 ### Stage D — Real stage / atom workers (replaces the stub)
 

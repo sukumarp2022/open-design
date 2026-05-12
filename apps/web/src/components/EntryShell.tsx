@@ -288,6 +288,13 @@ export function EntryShell({
   // forward the pluginId so POST /api/projects pins the snapshot to
   // project + conversation, and request auto-send of the first
   // message so the user lands inside a running pipeline.
+  //
+  // Stage B of plugin-driven-flow-plan: the rail can stamp a
+  // `projectKind` on the payload so the daemon-side default binding
+  // resolves to the matching scenario plugin (image / video / audio
+  // → od-media-generation, etc.). When the chip carried no kind we
+  // keep the historical 'prototype' default so legacy callers behave
+  // as before.
   function handlePluginLoopSubmit(payload: PluginLoopSubmit) {
     const head = payload.prompt.trim().split(/\s+/).slice(0, 8).join(' ');
     const fallbackName = head.length > 0 ? head : 'Untitled';
@@ -296,7 +303,7 @@ export function EntryShell({
         ? payload.pluginTitle.trim()
         : fallbackName;
     const metadata: ProjectMetadata = {
-      kind: 'prototype',
+      kind: payload.projectKind ?? 'prototype',
     };
     onCreateProject({
       name,
@@ -310,6 +317,33 @@ export function EntryShell({
         : {}),
       autoSendFirstMessage: true,
     });
+  }
+
+  // Stage B of plugin-driven-flow-plan: the rail's "From folder" chip
+  // dispatcher. Prefers the Electron-native folder picker when
+  // available so a single click lands the user in an imported
+  // project. Browser-only shells fall back to the existing modal
+  // path so the user can paste a baseDir.
+  async function handleChipFolderImport() {
+    if (!onImportFolder) {
+      setNewProjectOpen(true);
+      return;
+    }
+    const picker =
+      typeof window !== 'undefined' ? window.electronAPI?.pickFolder : undefined;
+    if (typeof picker !== 'function') {
+      // No native picker — open the New Project modal so the user can
+      // paste a baseDir into the existing form.
+      setNewProjectOpen(true);
+      return;
+    }
+    try {
+      const picked = await picker();
+      if (!picked) return;
+      await onImportFolder(picked);
+    } catch {
+      // The picker can reject when the user cancels; silently ignore.
+    }
   }
 
   // Dismiss the avatar dropdown on outside-click / Escape so it
@@ -410,7 +444,7 @@ export function EntryShell({
             <span className="avatar-item-icon" aria-hidden>
               <Icon name="external-link" size={14} />
             </span>
-            <span>Follow @nexudotio</span>
+            <span>Follow @nexudotio on X</span>
           </a>
           <a
             className="avatar-item"
@@ -612,6 +646,16 @@ export function EntryShell({
                 onSubmit={handlePluginLoopSubmit}
                 onOpenProject={onOpenProject}
                 onViewAllProjects={() => changeView('projects')}
+                onImportFolder={handleChipFolderImport}
+                onOpenNewProject={(tab) => {
+                  // Stage B of plugin-driven-flow-plan: the rail's
+                  // "From template" chip wires through here so the
+                  // existing modal-based create flow still owns the
+                  // template picker UI. Future tabs (e.g. live-artifact
+                  // import) can reuse the same callback.
+                  void tab;
+                  setNewProjectOpen(true);
+                }}
               />
             ) : null}
             {view === 'projects' ? (

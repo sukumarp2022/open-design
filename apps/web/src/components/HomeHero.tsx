@@ -10,6 +10,11 @@
 import { forwardRef, useMemo, useState } from 'react';
 import type { InstalledPluginRecord } from '@open-design/contracts';
 import { Icon } from './Icon';
+import {
+  chipsForGroup,
+  type ChipGroup,
+  type HomeHeroChip,
+} from './home-hero/chips';
 
 export interface HomeHeroSubmitHandler {
   (): void;
@@ -20,11 +25,14 @@ interface Props {
   onPromptChange: (value: string) => void;
   onSubmit: HomeHeroSubmitHandler;
   activePluginTitle: string | null;
+  activeChipId: string | null;
   onClearActivePlugin: () => void;
   pluginOptions: InstalledPluginRecord[];
   pluginsLoading: boolean;
   pendingPluginId: string | null;
+  pendingChipId: string | null;
   onPickPlugin: (record: InstalledPluginRecord, nextPrompt: string | null) => void;
+  onPickChip: (chip: HomeHeroChip) => void;
   contextItemCount: number;
   error: string | null;
 }
@@ -35,11 +43,14 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     onPromptChange,
     onSubmit,
     activePluginTitle,
+    activeChipId,
     onClearActivePlugin,
     pluginOptions,
     pluginsLoading,
     pendingPluginId,
+    pendingChipId,
     onPickPlugin,
+    onPickChip,
     contextItemCount,
     error,
   },
@@ -217,6 +228,29 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
         </div>
       </div>
 
+      <div
+        className="home-hero__rail"
+        role="toolbar"
+        aria-label="Pick a project category or migration shortcut"
+        data-testid="home-hero-rail"
+      >
+        <RailGroup
+          group="create"
+          activeChipId={activeChipId}
+          pendingChipId={pendingChipId}
+          pendingPluginId={pendingPluginId}
+          onPickChip={onPickChip}
+        />
+        <span className="home-hero__rail-divider" aria-hidden />
+        <RailGroup
+          group="migrate"
+          activeChipId={activeChipId}
+          pendingChipId={pendingChipId}
+          pendingPluginId={pendingPluginId}
+          onPickChip={onPickChip}
+        />
+      </div>
+
       {error ? (
         <div role="alert" className="home-hero__error">
           {error}
@@ -256,4 +290,52 @@ function replaceMentionToken(value: string, mention: PluginMention): string | nu
 
 function getPluginSourceLabel(plugin: InstalledPluginRecord): string {
   return plugin.sourceKind === 'bundled' ? 'Community' : 'My plugin';
+}
+
+interface RailGroupProps {
+  group: ChipGroup;
+  activeChipId: string | null;
+  pendingChipId: string | null;
+  pendingPluginId: string | null;
+  onPickChip: (chip: HomeHeroChip) => void;
+}
+
+function RailGroup({
+  group,
+  activeChipId,
+  pendingChipId,
+  pendingPluginId,
+  onPickChip,
+}: RailGroupProps) {
+  const chips = useMemo(() => chipsForGroup(group), [group]);
+  return (
+    <div
+      className={`home-hero__rail-group home-hero__rail-group--${group}`}
+      data-rail-group={group}
+    >
+      {chips.map((chip) => {
+        const isActive = activeChipId === chip.id;
+        const isPending = pendingChipId === chip.id;
+        const cls = ['home-hero__rail-chip', `home-hero__rail-chip--${group}`];
+        if (isActive) cls.push('is-active');
+        if (isPending) cls.push('is-pending');
+        return (
+          <button
+            key={chip.id}
+            type="button"
+            className={cls.join(' ')}
+            data-chip-id={chip.id}
+            data-testid={`home-hero-rail-${chip.id}`}
+            onClick={() => onPickChip(chip)}
+            disabled={isPending || pendingPluginId !== null}
+            aria-pressed={isActive}
+            title={chip.hint ?? chip.label}
+          >
+            <Icon name={chip.icon} size={14} className="home-hero__rail-chip-icon" />
+            <span className="home-hero__rail-chip-label">{chip.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }

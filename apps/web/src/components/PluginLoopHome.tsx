@@ -20,6 +20,14 @@ export interface PluginLoopSubmit {
   appliedPluginSnapshotId: string | null;
   pluginTitle: string | null;
   taskKind: string | null;
+  // Stage B of plugin-driven-flow-plan: when the user picked a Home
+  // chip the rail tells the submit handler which `ProjectKind` to
+  // stamp on the new project's metadata. The daemon-side default
+  // binding then resolves to the matching scenario plugin (image /
+  // video / audio → od-media-generation, others → od-new-generation).
+  // Null means "no chip selected; use the historical 'prototype'
+  // default so legacy callers behave as before".
+  projectKind?: 'prototype' | 'deck' | 'template' | 'image' | 'video' | 'audio' | 'other' | null;
 }
 
 interface Props {

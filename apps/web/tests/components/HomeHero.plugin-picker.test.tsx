@@ -46,6 +46,7 @@ describe('HomeHero plugin picker', () => {
         onPromptChange={onPromptChange}
         onSubmit={() => undefined}
         activePluginTitle={null}
+        activeChipId={null}
         onClearActivePlugin={() => undefined}
         pluginOptions={[
           makePlugin('sample-plugin', 'Sample Plugin'),
@@ -53,7 +54,9 @@ describe('HomeHero plugin picker', () => {
         ]}
         pluginsLoading={false}
         pendingPluginId={null}
+        pendingChipId={null}
         onPickPlugin={onPickPlugin}
+        onPickChip={() => undefined}
         contextItemCount={0}
         error={null}
       />,
