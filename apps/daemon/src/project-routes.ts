@@ -93,6 +93,14 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           );
         }
       }
+      if (customInstructions !== undefined
+          && typeof customInstructions !== 'string'
+          && customInstructions !== null) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'customInstructions must be a string or null');
+      }
+      if (typeof customInstructions === 'string' && customInstructions.length > 5000) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'customInstructions exceeds 5 000 character limit');
+      }
       const now = Date.now();
       const project = insertProject(db, {
         id,
@@ -114,7 +122,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             : null,
         customInstructions:
           typeof customInstructions === 'string'
-            ? customInstructions.slice(0, 5000)
+            ? customInstructions
             : null,
         createdAt: now,
         updatedAt: now,
