@@ -24,6 +24,7 @@ import type {
 // component lets future rebases against upstream `EntryView` (props,
 // connector lifecycle, exported helpers) stay close to a no-op here.
 import { EntryShell } from './EntryShell';
+import type { IntegrationTab } from './IntegrationsView';
 import type { CreateInput } from './NewProjectPanel';
 import {
   fetchConnectors,
@@ -42,6 +43,8 @@ interface Props {
   // sticky top-bar can expose the active CLI/BYOK + model and persist
   // changes through the same channels as the project view.
   config: AppConfig;
+  integrationInitialTab?: IntegrationTab;
+  composioConfigLoading?: boolean;
   daemonLive: boolean;
   onModeChange: (mode: ExecMode) => void;
   onAgentChange: (id: string) => void;
@@ -78,7 +81,8 @@ interface Props {
   onOpenLiveArtifact: (projectId: string, artifactId: string) => void;
   onDeleteProject: (id: string) => void;
   onChangeDefaultDesignSystem: (id: string) => void;
-  onOpenSettings: (section?: 'execution' | 'media' | 'composio' | 'integrations' | 'language' | 'appearance' | 'notifications' | 'pet' | 'about') => void;
+  onPersistComposioKey: (composio: AppConfig['composio']) => Promise<void> | void;
+  onOpenSettings: (section?: 'execution' | 'media' | 'composio' | 'orbit' | 'integrations' | 'mcpClient' | 'language' | 'appearance' | 'notifications' | 'pet' | 'library' | 'about') => void;
 }
 
 const CONNECTOR_CALLBACK_MESSAGE_TYPE = 'open-design:connector-connected';
@@ -203,6 +207,8 @@ export function EntryView({
   defaultDesignSystemId,
   agents,
   config,
+  integrationInitialTab,
+  composioConfigLoading = false,
   daemonLive,
   onModeChange,
   onAgentChange,
@@ -221,6 +227,7 @@ export function EntryView({
   onOpenLiveArtifact,
   onDeleteProject,
   onChangeDefaultDesignSystem,
+  onPersistComposioKey,
   onOpenSettings,
 }: Props) {
   const [connectors, setConnectors] = useState<ConnectorDetail[]>([]);
@@ -282,6 +289,8 @@ export function EntryView({
       defaultDesignSystemId={defaultDesignSystemId}
       connectors={connectors}
       connectorsLoading={connectorsLoading}
+      {...(integrationInitialTab ? { integrationInitialTab } : {})}
+      composioConfigLoading={composioConfigLoading}
       skillsLoading={skillsLoading}
       designSystemsLoading={designSystemsLoading}
       projectsLoading={projectsLoading}
@@ -301,6 +310,7 @@ export function EntryView({
       onOpenLiveArtifact={onOpenLiveArtifact}
       onDeleteProject={onDeleteProject}
       onChangeDefaultDesignSystem={onChangeDefaultDesignSystem}
+      onPersistComposioKey={onPersistComposioKey}
       onOpenSettings={onOpenSettings}
     />
   );

@@ -48,6 +48,10 @@ describe('router entry sub-views', () => {
     expect(parseRoute('/design-systems')).toEqual({ kind: 'home', view: 'design-systems' });
   });
 
+  it('parses /tasks as the tasks entry view', () => {
+    expect(parseRoute('/tasks')).toEqual({ kind: 'home', view: 'tasks' });
+  });
+
   it('still parses /projects/<id> as a project detail route', () => {
     expect(parseRoute('/projects/abc')).toEqual({ kind: 'project', projectId: 'abc', fileName: null });
   });
@@ -56,6 +60,7 @@ describe('router entry sub-views', () => {
     for (const route of [
       { kind: 'home', view: 'home' } as Route,
       { kind: 'home', view: 'projects' } as Route,
+      { kind: 'home', view: 'tasks' } as Route,
       { kind: 'home', view: 'design-systems' } as Route,
     ]) {
       expect(parseRoute(buildPath(route))).toEqual(route);

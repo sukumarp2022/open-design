@@ -36,11 +36,12 @@ import { GithubStarBadge } from './GithubStarBadge';
 import { formatStars, GITHUB_REPO_URL, useGithubStars } from './useGithubStars';
 import { HomeView } from './HomeView';
 import { Icon } from './Icon';
+import { IntegrationsView, type IntegrationTab } from './IntegrationsView';
 import { InlineModelSwitcher } from './InlineModelSwitcher';
 import { NewProjectModal } from './NewProjectModal';
 import type { CreateInput } from './NewProjectPanel';
 import type { PluginLoopSubmit } from './PluginLoopHome';
-import { UseEverywhereModal } from './UseEverywhereModal';
+import { TasksView } from './TasksView';
 
 // The topbar chips (GitHub star, model switcher, Use everywhere)
 // collapse into the settings dropdown when the viewport gets
@@ -142,6 +143,8 @@ interface Props {
   defaultDesignSystemId: string | null;
   connectors: ConnectorDetail[];
   connectorsLoading: boolean;
+  integrationInitialTab?: IntegrationTab;
+  composioConfigLoading?: boolean;
   skillsLoading?: boolean;
   designSystemsLoading?: boolean;
   projectsLoading?: boolean;
@@ -177,16 +180,20 @@ interface Props {
   onOpenLiveArtifact: (projectId: string, artifactId: string) => void;
   onDeleteProject: (id: string) => void;
   onChangeDefaultDesignSystem: (id: string) => void;
+  onPersistComposioKey: (composio: AppConfig['composio']) => Promise<void> | void;
   onOpenSettings: (
     section?:
       | 'execution'
       | 'media'
       | 'composio'
+      | 'orbit'
       | 'integrations'
+      | 'mcpClient'
       | 'language'
       | 'appearance'
       | 'notifications'
       | 'pet'
+      | 'library'
       | 'about',
   ) => void;
 }
@@ -200,6 +207,8 @@ export function EntryShell({
   defaultDesignSystemId,
   connectors,
   connectorsLoading,
+  integrationInitialTab = 'mcp',
+  composioConfigLoading = false,
   skillsLoading = false,
   designSystemsLoading = false,
   projectsLoading = false,
@@ -219,6 +228,7 @@ export function EntryShell({
   onOpenLiveArtifact,
   onDeleteProject,
   onChangeDefaultDesignSystem,
+  onPersistComposioKey,
   onOpenSettings,
 }: Props) {
   const t = useT();
@@ -234,7 +244,7 @@ export function EntryShell({
   const [languageExpanded, setLanguageExpanded] = useState(false);
   const [appearanceExpanded, setAppearanceExpanded] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [useEverywhereOpen, setUseEverywhereOpen] = useState(false);
+  const [integrationTab, setIntegrationTab] = useState<IntegrationTab>(integrationInitialTab);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
   // Star count + active-model summary are kept in render scope so
   // the dropdown's collapsed rows can mirror what the chips show
@@ -246,16 +256,17 @@ export function EntryShell({
     [config, agents, t],
   );
 
-  // The agent-handoff guide substitutes 127.0.0.1:7456 in every snippet
-  // with whatever URL the user actually has open, so the curl examples
-  // they paste into Hermes / openclaw / Cursor work without manual
-  // editing. Falls back to the documented default when window is
-  // unavailable (SSR / unit-test render).
-  const liveDaemonUrl =
-    typeof window !== 'undefined' ? window.location.origin : undefined;
-
   function changeView(next: EntryViewKind) {
     navigate({ kind: 'home', view: next });
+  }
+
+  useEffect(() => {
+    setIntegrationTab(integrationInitialTab);
+  }, [integrationInitialTab]);
+
+  function openIntegrationTab(tab: IntegrationTab) {
+    setIntegrationTab(tab);
+    changeView('integrations');
   }
 
   const previewSystem = useMemo(
@@ -517,7 +528,7 @@ export function EntryShell({
             className="avatar-item"
             onClick={() => {
               setAvatarMenuOpen(false);
-              setUseEverywhereOpen(true);
+              openIntegrationTab('use-everywhere');
             }}
             data-testid="entry-avatar-use-everywhere"
           >
@@ -570,7 +581,7 @@ export function EntryShell({
               <button
                 type="button"
                 className="use-everywhere-chip"
-                onClick={() => setUseEverywhereOpen(true)}
+                onClick={() => openIntegrationTab('use-everywhere')}
                 title={t('entry.useEverywhereTitle')}
                 aria-label={t('entry.useEverywhereAria')}
                 data-testid="entry-use-everywhere-button"
@@ -618,6 +629,12 @@ export function EntryShell({
                 </div>
               )
             ) : null}
+            {view === 'tasks' ? (
+              <TasksView
+                config={config}
+                onOpenOrbitSettings={() => onOpenSettings('orbit')}
+              />
+            ) : null}
             {view === 'design-systems' ? (
               designSystemsLoading ? (
                 <CenteredLoader label={t('common.loading')} />
@@ -634,6 +651,14 @@ export function EntryShell({
                   />
                 </div>
               )
+            ) : null}
+            {view === 'integrations' ? (
+              <IntegrationsView
+                config={config}
+                initialTab={integrationTab}
+                composioConfigLoading={composioConfigLoading}
+                onPersistComposioKey={onPersistComposioKey}
+              />
             ) : null}
           </div>
         </main>
@@ -657,19 +682,9 @@ export function EntryShell({
         onCreate={handleCreate}
         onImportClaudeDesign={onImportClaudeDesign}
         {...(onImportFolder ? { onImportFolder } : {})}
-        onOpenConnectorsTab={() => onOpenSettings('composio')}
+        onOpenConnectorsTab={() => openIntegrationTab('connectors')}
         onClose={() => setNewProjectOpen(false)}
       />
-      {useEverywhereOpen ? (
-        <UseEverywhereModal
-          onClose={() => setUseEverywhereOpen(false)}
-          onOpenSettings={() => {
-            setUseEverywhereOpen(false);
-            onOpenSettings('integrations');
-          }}
-          {...(liveDaemonUrl ? { daemonUrl: liveDaemonUrl } : {})}
-        />
-      ) : null}
     </div>
   );
 }

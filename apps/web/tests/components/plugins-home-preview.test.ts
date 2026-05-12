@@ -83,6 +83,20 @@ describe('inferPluginPreview', () => {
     expect(out.imageOnly).toBe(false);
   });
 
+  it('classifies audio plugins as media/audio with a playable audio url', () => {
+    const out = inferPluginPreview(
+      make({
+        id: 'aud',
+        preview: { type: 'audio', audio: 'https://cdn/jingle.mp3' },
+      }),
+    );
+    expect(out.kind).toBe('media');
+    if (out.kind !== 'media') return;
+    expect(out.mediaType).toBe('audio');
+    expect(out.audioUrl).toBe('https://cdn/jingle.mp3');
+    expect(out.videoUrl).toBeNull();
+  });
+
   it('classifies html-preview plugins as iframe-backed html surface', () => {
     const out = inferPluginPreview(
       make({

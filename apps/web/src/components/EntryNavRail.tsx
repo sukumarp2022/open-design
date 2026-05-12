@@ -1,8 +1,8 @@
 // Lovart-style left navigation rail for the entry view.
 //
 // Renders a narrow icon-only column. The first slot is the brand
-// logo (clicking navigates to home), followed by four primary
-// actions (new project, home, projects, design systems). A small
+// logo (clicking navigates to home), followed by primary
+// actions (new project, home, projects, tasks, design systems, integrations). A small
 // help launcher sits at the bottom and opens a popover with the
 // canonical "ask for help / submit a feature / what's new / download
 // desktop" external links. Language switching and other account-
@@ -14,7 +14,7 @@ import { EntryHelpMenu } from './EntryHelpMenu';
 import { Icon } from './Icon';
 import { useT } from '../i18n';
 
-export type EntryView = 'home' | 'projects' | 'design-systems';
+export type EntryView = 'home' | 'projects' | 'tasks' | 'design-systems' | 'integrations';
 
 interface Props {
   view: EntryView;
@@ -96,6 +96,15 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           <Icon name="folder" size={18} />
         </NavButton>
         <NavButton
+          active={view === 'tasks'}
+          ariaLabel="Tasks"
+          tooltip="Tasks"
+          onClick={() => onViewChange('tasks')}
+          testId="entry-nav-tasks"
+        >
+          <Icon name="kanban" size={18} />
+        </NavButton>
+        <NavButton
           active={view === 'design-systems'}
           ariaLabel={t('entry.navDesignSystems')}
           tooltip={t('entry.navDesignSystems')}
@@ -103,6 +112,15 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           testId="entry-nav-design-systems"
         >
           <Icon name="palette" size={18} />
+        </NavButton>
+        <NavButton
+          active={view === 'integrations'}
+          ariaLabel="Integrations"
+          tooltip="Integrations"
+          onClick={() => onViewChange('integrations')}
+          testId="entry-nav-integrations"
+        >
+          <Icon name="link" size={18} />
         </NavButton>
       </div>
       <div className="entry-nav-rail__footer">

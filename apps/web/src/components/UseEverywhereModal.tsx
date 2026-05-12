@@ -40,9 +40,6 @@ export function UseEverywhereModal({
   daemonUrl,
   versionHint,
 }: Props) {
-  const [activeId, setActiveId] = useState<GuideSection['id']>('overview');
-  const [guideCopy, setGuideCopy] = useState<CopyState>('idle');
-  const [snippetCopy, setSnippetCopy] = useState<{ key: string; state: CopyState } | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -64,62 +61,6 @@ export function UseEverywhereModal({
   useEffect(() => {
     closeRef.current?.focus();
   }, []);
-
-  const guideOptions: AgentGuideOptions = useMemo(() => {
-    const opts: AgentGuideOptions = {};
-    if (daemonUrl) opts.daemonUrl = daemonUrl;
-    if (versionHint) opts.versionHint = versionHint;
-    return opts;
-  }, [daemonUrl, versionHint]);
-
-  const fullGuide = useMemo(
-    () => buildAgentGuideMarkdown(guideOptions),
-    [guideOptions],
-  );
-
-  // GUIDE_SECTIONS is non-empty by construction (`sections.ts` ships the
-  // five tab definitions) but TS narrows `GUIDE_SECTIONS[0]` to a
-  // possibly-undefined value under strict index access. Resolve the
-  // active section through an explicit lookup that never returns
-  // `undefined` so callsites can assume a present section.
-  const activeSection = useMemo<GuideSection>(() => {
-    const found = GUIDE_SECTIONS.find((s) => s.id === activeId);
-    if (found) return found;
-    const first = GUIDE_SECTIONS[0];
-    if (!first) {
-      throw new Error('GUIDE_SECTIONS must define at least one section');
-    }
-    return first;
-  }, [activeId]);
-
-  async function copyText(text: string): Promise<CopyState> {
-    if (typeof navigator === 'undefined' || !navigator.clipboard) {
-      return 'failed';
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      return 'copied';
-    } catch {
-      return 'failed';
-    }
-  }
-
-  async function onCopyGuide() {
-    const state = await copyText(fullGuide);
-    setGuideCopy(state);
-    if (state !== 'idle') {
-      window.setTimeout(() => setGuideCopy('idle'), COPY_RESET_MS);
-    }
-  }
-
-  async function onCopySnippet(key: string, snippet: CodeSnippet) {
-    const text = applyDaemonUrl(snippet.body, daemonUrl);
-    const state = await copyText(text);
-    setSnippetCopy({ key, state });
-    if (state !== 'idle') {
-      window.setTimeout(() => setSnippetCopy(null), COPY_RESET_MS);
-    }
-  }
 
   return (
     <div
@@ -157,68 +98,144 @@ export function UseEverywhereModal({
           </button>
         </header>
 
-        <nav className="use-everywhere-modal__tabs" role="tablist" aria-label="Integration surfaces">
-          {GUIDE_SECTIONS.map((section) => {
-            const active = section.id === activeId;
-            return (
-              <button
-                key={section.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                className={`use-everywhere-modal__tab${active ? ' is-active' : ''}`}
-                onClick={() => setActiveId(section.id)}
-                data-testid={`use-everywhere-tab-${section.id}`}
-              >
-                {section.tabLabel}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="use-everywhere-modal__body">
-          <SectionView
-            section={activeSection}
-            daemonUrl={daemonUrl}
-            snippetCopy={snippetCopy}
-            onCopySnippet={onCopySnippet}
-          />
-        </div>
-
-        <footer className="use-everywhere-modal__foot">
-          <div className="use-everywhere-modal__foot-info">
-            <strong>One-click handoff.</strong>{' '}
-            <span>
-              Copies a structured markdown guide your agent can act on
-              immediately — install, verify, and use.
-            </span>
-          </div>
-          <div className="use-everywhere-modal__foot-actions">
-            {onOpenSettings ? (
-              <button
-                type="button"
-                className="use-everywhere-modal__secondary"
-                onClick={onOpenSettings}
-                data-testid="use-everywhere-open-settings"
-              >
-                <Icon name="settings" size={13} />
-                Configure in Settings
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="use-everywhere-modal__primary"
-              onClick={onCopyGuide}
-              data-testid="use-everywhere-copy-guide"
-            >
-              <Icon name="copy" size={13} />
-              {copyLabel(guideCopy, 'Copy guide for an agent')}
-            </button>
-          </div>
-        </footer>
+        <UseEverywhereGuidePanel
+          onOpenSettings={onOpenSettings}
+          daemonUrl={daemonUrl}
+          versionHint={versionHint}
+        />
       </div>
     </div>
   );
+}
+
+export function UseEverywhereGuidePanel({
+  onOpenSettings,
+  daemonUrl,
+  versionHint,
+}: Omit<Props, 'onClose'>) {
+  const [activeId, setActiveId] = useState<GuideSection['id']>('overview');
+  const [guideCopy, setGuideCopy] = useState<CopyState>('idle');
+  const [snippetCopy, setSnippetCopy] = useState<{ key: string; state: CopyState } | null>(null);
+
+  const guideOptions: AgentGuideOptions = useMemo(() => {
+    const opts: AgentGuideOptions = {};
+    if (daemonUrl) opts.daemonUrl = daemonUrl;
+    if (versionHint) opts.versionHint = versionHint;
+    return opts;
+  }, [daemonUrl, versionHint]);
+
+  const fullGuide = useMemo(
+    () => buildAgentGuideMarkdown(guideOptions),
+    [guideOptions],
+  );
+
+  // GUIDE_SECTIONS is non-empty by construction (`sections.ts` ships the
+  // five tab definitions) but TS narrows `GUIDE_SECTIONS[0]` to a
+  // possibly-undefined value under strict index access. Resolve the
+  // active section through an explicit lookup that never returns
+  // `undefined` so callsites can assume a present section.
+  const activeSection = useMemo<GuideSection>(() => {
+    const found = GUIDE_SECTIONS.find((s) => s.id === activeId);
+    if (found) return found;
+    const first = GUIDE_SECTIONS[0];
+    if (!first) {
+      throw new Error('GUIDE_SECTIONS must define at least one section');
+    }
+    return first;
+  }, [activeId]);
+
+  async function onCopyGuide() {
+    const state = await copyText(fullGuide);
+    setGuideCopy(state);
+    if (state !== 'idle') {
+      window.setTimeout(() => setGuideCopy('idle'), COPY_RESET_MS);
+    }
+  }
+
+  async function onCopySnippet(key: string, snippet: CodeSnippet) {
+    const text = applyDaemonUrl(snippet.body, daemonUrl);
+    const state = await copyText(text);
+    setSnippetCopy({ key, state });
+    if (state !== 'idle') {
+      window.setTimeout(() => setSnippetCopy(null), COPY_RESET_MS);
+    }
+  }
+
+  return (
+    <>
+      <nav className="use-everywhere-modal__tabs" role="tablist" aria-label="Integration surfaces">
+        {GUIDE_SECTIONS.map((section) => {
+          const active = section.id === activeId;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className={`use-everywhere-modal__tab${active ? ' is-active' : ''}`}
+              onClick={() => setActiveId(section.id)}
+              data-testid={`use-everywhere-tab-${section.id}`}
+            >
+              {section.tabLabel}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="use-everywhere-modal__body">
+        <SectionView
+          section={activeSection}
+          daemonUrl={daemonUrl}
+          snippetCopy={snippetCopy}
+          onCopySnippet={onCopySnippet}
+        />
+      </div>
+
+      <footer className="use-everywhere-modal__foot">
+        <div className="use-everywhere-modal__foot-info">
+          <strong>One-click handoff.</strong>{' '}
+          <span>
+            Copies a structured markdown guide your agent can act on
+            immediately — install, verify, and use.
+          </span>
+        </div>
+        <div className="use-everywhere-modal__foot-actions">
+          {onOpenSettings ? (
+            <button
+              type="button"
+              className="use-everywhere-modal__secondary"
+              onClick={onOpenSettings}
+              data-testid="use-everywhere-open-settings"
+            >
+              <Icon name="settings" size={13} />
+              Configure MCP server
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="use-everywhere-modal__primary"
+            onClick={onCopyGuide}
+            data-testid="use-everywhere-copy-guide"
+          >
+            <Icon name="copy" size={13} />
+            {copyLabel(guideCopy, 'Copy guide for an agent')}
+          </button>
+        </div>
+      </footer>
+    </>
+  );
+}
+
+async function copyText(text: string): Promise<CopyState> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard) {
+    return 'failed';
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
 }
 
 interface SectionViewProps {

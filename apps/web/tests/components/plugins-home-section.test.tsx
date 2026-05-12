@@ -2,7 +2,7 @@
 
 // Plugins home section — UI contract.
 //
-// The section renders a single curated "category bar" (Deck /
+// The section renders a single curated "category bar" (Slides /
 // Prototype / Design system / HyperFrames / Video / Image / Audio).
 // Picking a category filters the grid; the All pill clears the
 // category filter. A Featured chip sits orthogonal to the row and

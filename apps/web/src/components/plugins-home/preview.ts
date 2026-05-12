@@ -22,10 +22,16 @@ export type PluginPreviewKind = 'media' | 'html' | 'design' | 'text';
 
 export interface MediaPreviewSpec {
   kind: 'media';
-  /** 'image' (poster) or 'video' (poster + optional autoplay video). */
-  mediaType: 'image' | 'video';
+  /**
+   * Asset family the card / detail surface should render:
+   *   - 'image' → poster only (image-template plugins)
+   *   - 'video' → poster + optional autoplay clip on hover
+   *   - 'audio' → optional cover poster + native audio player
+   */
+  mediaType: 'image' | 'video' | 'audio';
   poster: string | null;
   videoUrl: string | null;
+  audioUrl: string | null;
   /** True when the plugin only ships a still image, no video stream. */
   imageOnly: boolean;
 }
@@ -68,6 +74,7 @@ interface PreviewBlock {
   video?: unknown;
   gif?: unknown;
   entry?: unknown;
+  audio?: unknown;
 }
 
 interface ExampleOutputEntry {
@@ -150,6 +157,7 @@ export function inferPluginPreview(
     const poster = typeof preview.poster === 'string' ? preview.poster : null;
     const video = typeof preview.video === 'string' ? preview.video : null;
     const gif = typeof preview.gif === 'string' ? preview.gif : null;
+    const audio = typeof preview.audio === 'string' ? preview.audio : null;
     const entry = typeof preview.entry === 'string' ? preview.entry : null;
 
     if (t === 'video' || video) {
@@ -158,7 +166,18 @@ export function inferPluginPreview(
         mediaType: 'video',
         poster: poster ?? gif ?? null,
         videoUrl: video,
+        audioUrl: null,
         imageOnly: !video,
+      };
+    }
+    if (t === 'audio' || audio) {
+      return {
+        kind: 'media',
+        mediaType: 'audio',
+        poster: poster ?? gif ?? null,
+        videoUrl: null,
+        audioUrl: audio,
+        imageOnly: false,
       };
     }
     if (t === 'image' || poster || gif) {
@@ -167,6 +186,7 @@ export function inferPluginPreview(
         mediaType: 'image',
         poster: poster ?? gif ?? null,
         videoUrl: null,
+        audioUrl: null,
         imageOnly: true,
       };
     }

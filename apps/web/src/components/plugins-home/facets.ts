@@ -3,7 +3,11 @@
 // The home filter is a single-axis "category" picker over a curated
 // list of the major buckets users actually browse by:
 //
-//   Deck · Prototype · Design system · HyperFrames · Video · Image · Audio
+//   Slides · Prototype · Design system · HyperFrames · Video · Image · Audio
+//
+// (The "Slides" bucket maps to plugins with mode=deck — the slug
+// stays `deck` for stability while the user-facing label reads
+// "Slides" since it is the more universally understood term.)
 //
 // Categories are NOT a free-form taxonomy — they are a small, hand
 // authored shortlist so the filter row stays one line and stays
@@ -80,7 +84,7 @@ function byTag(tag: string): (record: InstalledPluginRecord) => boolean {
 }
 
 // Curated category list. Order is the display order — keep the
-// creative scenarios (Deck, Prototype, Design system) up front so
+// creative scenarios (Slides, Prototype, Design system) up front so
 // the eye lands on them first, with the media-generation buckets
 // (HyperFrames, Video, Image, Audio) trailing.
 //
@@ -91,7 +95,7 @@ function byTag(tag: string): (record: InstalledPluginRecord) => boolean {
 // counts — that's expected: it lets users either drill into the
 // specialised bucket or browse all videos including HyperFrames.
 const PRIMARY_CATEGORIES: readonly CategoryDef[] = [
-  { slug: 'deck', label: 'Deck', test: byMode('deck') },
+  { slug: 'deck', label: 'Slides', test: byMode('deck') },
   { slug: 'prototype', label: 'Prototype', test: byMode('prototype') },
   { slug: 'design-system', label: 'Design system', test: byMode('design-system') },
   { slug: 'hyperframes', label: 'HyperFrames', test: byTag('hyperframes') },
@@ -171,9 +175,9 @@ export function filterByQuery(
 // Smart default selection. The Plugins home shipped with no preselection,
 // which left first-time visitors staring at an unfiltered grid mixing
 // design-system patches with cinematic decks. We now nudge them into
-// the most representative creative slice (Deck) when it exists in the
-// live catalog. We deliberately fall back to no default when the slug
-// is missing so test fixtures and degraded catalogs render cleanly.
+// the most representative creative slice (Slides) when it exists in
+// the live catalog. We deliberately fall back to no default when the
+// slug is missing so test fixtures and degraded catalogs render cleanly.
 export const PREFERRED_DEFAULT_SELECTION: FacetSelection = {
   category: 'deck',
 };

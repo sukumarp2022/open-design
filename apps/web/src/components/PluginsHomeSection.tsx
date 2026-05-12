@@ -1,7 +1,7 @@
 // Plugins discovery section on Home.
 //
 // Renders a single curated "category bar" (Lovart-style) over the
-// bundled plugin catalog: Deck · Prototype · Design system ·
+// bundled plugin catalog: Slides · Prototype · Design system ·
 // HyperFrames · Video · Image · Audio. Picking a category filters
 // the grid; "All" shows everything visible. A small Featured chip
 // sits orthogonal to the row for quick access to curator-promoted

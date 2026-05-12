@@ -16177,8 +16177,53 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
 .plugin-info-pane .plugin-details-modal__atom {
   font-size: 11px;
 }
+/* Compact byline — drop the capsule shape so the author block can
+   shrink, wrap, and stack inside narrow PreviewModal sidebars
+   (~320–400px) without overflowing the pane or breaking the rounded
+   pill into a stretched ellipse. The name + links wrap onto separate
+   lines when there isn't room, the links lose their border-left
+   separator (stacks vertically), and long author / handle strings
+   ellipsis-truncate against the available column width. */
 .plugin-info-pane .plugin-details-modal__byline {
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.plugin-info-pane .plugin-details-modal__byline-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.plugin-info-pane .plugin-details-modal__byline-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.plugin-info-pane .plugin-details-modal__byline .plugin-details-modal__author-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plugin-info-pane .plugin-details-modal__byline-links {
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  padding-left: 0;
+  border-left: 0;
+}
+.plugin-info-pane .plugin-details-modal__byline-links .plugin-details-modal__ext-link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* Design-system sidebar stacks DESIGN.md prose at the top of the pane
    and the plugin-info block below; the divider mirrors the dashed

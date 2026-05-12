@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 // columns and each sub-view now owns a top-level path so the browser
 // back/forward buttons work, deep links are shareable, and per-tab
 // state isn't trapped behind a `useState` boundary.
-export type EntryHomeView = 'home' | 'projects' | 'design-systems';
+export type EntryHomeView = 'home' | 'projects' | 'tasks' | 'design-systems' | 'integrations';
 
 export type Route =
   | { kind: 'home'; view: EntryHomeView }
@@ -37,6 +37,12 @@ export function parseRoute(pathname: string): Route {
   if (parts[0] === 'design-systems') {
     return { kind: 'home', view: 'design-systems' };
   }
+  if (parts[0] === 'tasks') {
+    return { kind: 'home', view: 'tasks' };
+  }
+  if (parts[0] === 'integrations') {
+    return { kind: 'home', view: 'integrations' };
+  }
   // Phase 2B / spec §11.6 — marketplace deep UI routes. Two paths:
   //   /marketplace            → catalog grid (MarketplaceView)
   //   /marketplace/<pluginId> → detail page (PluginDetailView)
@@ -54,7 +60,9 @@ export function parseRoute(pathname: string): Route {
 export function buildPath(route: Route): string {
   if (route.kind === 'home') {
     if (route.view === 'projects') return '/projects';
+    if (route.view === 'tasks') return '/tasks';
     if (route.view === 'design-systems') return '/design-systems';
+    if (route.view === 'integrations') return '/integrations';
     return '/';
   }
   if (route.kind === 'marketplace') return '/marketplace';

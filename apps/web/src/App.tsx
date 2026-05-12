@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { EntryView } from './components/EntryView';
+import type { IntegrationTab } from './components/IntegrationsView';
 import { MarketplaceView } from './components/MarketplaceView';
 import { PluginDetailView } from './components/PluginDetailView';
 import type { CreateInput } from './components/NewProjectPanel';
@@ -120,6 +121,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsWelcome, setSettingsWelcome] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>('execution');
+  const [integrationInitialTab, setIntegrationInitialTab] = useState<IntegrationTab>('mcp');
   const [daemonLive, setDaemonLive] = useState(false);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
@@ -688,6 +690,17 @@ export function App() {
   }, [route, activeProject, projects, daemonLive]);
 
   const openSettings = useCallback((section: SettingsSection = 'execution') => {
+    if (section === 'composio' || section === 'mcpClient' || section === 'integrations') {
+      setIntegrationInitialTab(
+        section === 'composio'
+          ? 'connectors'
+          : section === 'mcpClient'
+            ? 'mcp'
+            : 'use-everywhere',
+      );
+      navigate({ kind: 'home', view: 'integrations' });
+      return;
+    }
     setSettingsWelcome(false);
     setSettingsInitialSection(section);
     setSettingsOpen(true);
@@ -700,9 +713,8 @@ export function App() {
   }, []);
 
   const openMcpSettings = useCallback(() => {
-    setSettingsWelcome(false);
-    setSettingsInitialSection('mcpClient');
-    setSettingsOpen(true);
+    setIntegrationInitialTab('mcp');
+    navigate({ kind: 'home', view: 'integrations' });
   }, []);
 
   // Explicit enabled toggle — true = wake, false = tuck. Persists to
@@ -820,6 +832,8 @@ export function App() {
           defaultDesignSystemId={config.designSystemId}
           agents={agents}
           config={config}
+          integrationInitialTab={integrationInitialTab}
+          composioConfigLoading={composioConfigLoading}
           daemonLive={daemonLive}
           onModeChange={handleModeChange}
           onAgentChange={handleAgentChange}
@@ -838,6 +852,7 @@ export function App() {
           onOpenLiveArtifact={handleOpenLiveArtifact}
           onDeleteProject={handleDeleteProject}
           onChangeDefaultDesignSystem={handleChangeDefaultDesignSystem}
+          onPersistComposioKey={handleConfigPersistComposioKey}
           onOpenSettings={openSettings}
         />
       )}

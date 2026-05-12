@@ -1,5 +1,5 @@
 // Facet derivation contract for the plugins-home filter row. The
-// home section is driven by a single curated "category" axis (Deck /
+// home section is driven by a single curated "category" axis (Slides /
 // Prototype / Design system / HyperFrames / Video / Image / Audio).
 // These tests lock the per-record category extraction, the catalog
 // build (preserves curated order, drops empty buckets), and the
