@@ -10,9 +10,21 @@
 }
 .plugins-home__head {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+}
+.plugins-home__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.plugins-home__subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 .plugins-home__title {
   margin: 0;
@@ -42,78 +54,167 @@
   border-radius: 3px;
 }
 
-/* Category filter pills */
-.plugins-home__filters {
+/* ============================================================
+   Faceted filter — three rows (Surface / Type / Scenario) with a
+   leading axis label on the left and pills wrapping on the right.
+   The Featured chip lives in a smaller mode strip above the rows so
+   it reads as orthogonal to the facet selections it overrides.
+   ============================================================ */
+.plugins-home__mode {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
+  padding-bottom: 2px;
 }
-.plugins-home__filter {
+.plugins-home__mode-total {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.plugins-home__chip {
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 5px;
+  padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 12px;
   cursor: pointer;
   transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
 }
-.plugins-home__filter:hover {
+.plugins-home__chip:hover {
   border-color: var(--border-strong);
   color: var(--text);
 }
-.plugins-home__filter.is-active {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg-panel);
-}
-.plugins-home__filter.is-active .plugins-home__filter-count {
-  color: var(--bg-panel);
-  opacity: 0.8;
-}
-.plugins-home__filter-count {
+.plugins-home__chip-count {
   font-size: 10.5px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
-.plugins-home__filter-icon {
-  flex: 0 0 auto;
-  margin-right: -1px;
-}
-
-/* Featured pill — stands out in the row to flag the curated entry. */
-.plugins-home__filter--featured {
+.plugins-home__chip--featured {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
   color: var(--accent);
   background: var(--accent-tint);
 }
-.plugins-home__filter--featured:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.plugins-home__filter--featured.is-active {
+.plugins-home__chip--featured.is-active {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
 }
-.plugins-home__filter--featured.is-active .plugins-home__filter-count {
+.plugins-home__chip--featured.is-active .plugins-home__chip-count {
   color: white;
+  opacity: 0.85;
 }
 
-/* "More" pill — toggles the overflow scenario tags into the pill row
-   inline. Styled to read as a meta control (dashed border, muted) so
-   it never competes with a real category for the user's attention. */
-.plugins-home__filter--more {
-  border-style: dashed;
-  color: var(--text-faint);
+.plugins-home__linkbtn {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
-.plugins-home__filter--more:hover {
+.plugins-home__linkbtn:hover {
   color: var(--text);
+}
+
+.plugins-home__facets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+.plugins-home__facet-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  align-items: start;
+  gap: 12px;
+}
+.plugins-home__facet-label {
+  padding-top: 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.plugins-home__facet-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.plugins-home__pill {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+.plugins-home__pill:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.plugins-home__pill.is-active {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg-panel);
+}
+.plugins-home__pill.is-active .plugins-home__pill-count {
+  color: var(--bg-panel);
+  opacity: 0.8;
+}
+.plugins-home__pill-count {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.plugins-home__pill--all {
+  background: var(--accent-tint);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  color: var(--accent);
+}
+.plugins-home__pill--all.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.plugins-home__pill--all.is-active .plugins-home__pill-count {
+  color: white;
+  opacity: 0.85;
+}
+
+.plugins-home__empty--filtered {
   border-style: solid;
+  background: var(--bg-subtle);
+}
+
+@media (max-width: 720px) {
+  .plugins-home__facet-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .plugins-home__facet-label {
+    padding-top: 0;
+  }
 }
 
 /* Card grid */

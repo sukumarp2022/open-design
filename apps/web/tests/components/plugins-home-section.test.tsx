@@ -2,16 +2,17 @@
 
 // Plugins home section — UI contract.
 //
-// The section is now driven by `usePluginCategories` (tag-based
-// scenario chips) rather than the legacy 4-bucket taxonomy. This
-// suite locks in:
+// The section renders a 3-axis SURFACE / TYPE / SCENARIO faceted
+// filter and AND-composes selections across axes. A small Featured
+// chip sits orthogonal to the facet rows. This suite locks in:
 //
-//   1. Featured pill is selected by default when at least one plugin
-//      declares `od.featured: true`.
-//   2. Clicking a scenario tag filters the grid to plugins carrying
-//      that tag.
-//   3. The "More" pill toggles overflow tags into the row when the
-//      catalog exceeds the visible limit.
+//   1. All three facet rows render with axis-specific pills.
+//   2. Picking a Surface pill filters the grid to plugins on that
+//      surface.
+//   3. Selections compose via AND across axes (Web + Marketing only
+//      shows plugins that match both).
+//   4. Featured chip overrides the facet selection and only shows
+//      curator-promoted plugins.
 
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -59,16 +60,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('PluginsHomeSection (tag-driven)', () => {
-  it('defaults to the Featured pill when a plugin declares featured', () => {
-    const plugins = [
-      makePlugin({ id: 'star', featured: true, mode: 'image', tags: ['image'] }),
-      makePlugin({ id: 'b', mode: 'image', tags: ['image'] }),
-      makePlugin({ id: 'c', mode: 'video', tags: ['video'] }),
-    ];
+const sample: InstalledPluginRecord[] = [
+  makePlugin({ id: 'a', surface: 'web', mode: 'design-system', scenario: 'design' }),
+  makePlugin({ id: 'b', surface: 'web', mode: 'prototype', scenario: 'marketing' }),
+  makePlugin({ id: 'c', surface: 'image', mode: 'image', scenario: 'marketing' }),
+  makePlugin({ id: 'd', surface: 'video', mode: 'video', scenario: 'engineering' }),
+];
+
+describe('PluginsHomeSection (faceted)', () => {
+  it('renders the three facet rows and an "All" pill in each', () => {
     render(
       <PluginsHomeSection
-        plugins={plugins}
+        plugins={sample}
         loading={false}
         activePluginId={null}
         pendingApplyId={null}
@@ -76,23 +79,18 @@ describe('PluginsHomeSection (tag-driven)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    const featured = screen.getByTestId('plugins-home-filter-featured');
-    expect(featured.getAttribute('aria-selected')).toBe('true');
-    const grid = screen.getByRole('list');
-    const items = within(grid).getAllByRole('listitem');
-    expect(items).toHaveLength(1);
-    expect(items[0]?.getAttribute('data-plugin-id')).toBe('star');
+    expect(screen.getByTestId('plugins-home-row-surface')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-row-type')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-row-scenario')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-surface-all')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-type-all')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-scenario-all')).toBeTruthy();
   });
 
-  it('filters by a scenario tag when its pill is clicked', () => {
-    const plugins = [
-      makePlugin({ id: 'a', mode: 'image', tags: ['image', 'marketing'] }),
-      makePlugin({ id: 'b', mode: 'video', tags: ['video', 'marketing'] }),
-      makePlugin({ id: 'c', mode: 'prototype', tags: ['prototype', 'dashboard'] }),
-    ];
+  it('filters by a Surface pill when clicked', () => {
     render(
       <PluginsHomeSection
-        plugins={plugins}
+        plugins={sample}
         loading={false}
         activePluginId={null}
         pendingApplyId={null}
@@ -100,20 +98,33 @@ describe('PluginsHomeSection (tag-driven)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    fireEvent.click(screen.getByTestId('plugins-home-filter-marketing'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-surface-web'));
     const items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((i) => i.getAttribute('data-plugin-id')).sort()).toEqual(['a', 'b']);
   });
 
-  it('toggles overflow tags into the pill row when "More" is clicked', () => {
-    // Build 12 plugins each tagged with a unique slug — sorted
-    // alphabetically by the catalog so the last one ('zz-late') is
-    // guaranteed to sit in the overflow tail past the default
-    // 8-pill visible window.
-    const prefixes = ['aa', 'ab', 'ac', 'ad', 'ae', 'af', 'ag', 'ah', 'ai', 'aj', 'ak', 'zz-late'];
-    const plugins = prefixes.map((p) =>
-      makePlugin({ id: `id-${p}`, tags: [p, 'image'], mode: 'image' }),
+  it('AND-composes Surface + Scenario selections', () => {
+    render(
+      <PluginsHomeSection
+        plugins={sample}
+        loading={false}
+        activePluginId={null}
+        pendingApplyId={null}
+        onUse={() => {}}
+        onOpenDetails={() => {}}
+      />,
     );
+    fireEvent.click(screen.getByTestId('plugins-home-pill-surface-web'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-scenario-marketing'));
+    const items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['b']);
+  });
+
+  it('Featured chip overrides facet selection and shows only featured plugins', () => {
+    const plugins = [
+      makePlugin({ id: 'star', surface: 'web', mode: 'design-system', scenario: 'design', featured: true }),
+      ...sample,
+    ];
     render(
       <PluginsHomeSection
         plugins={plugins}
@@ -124,10 +135,9 @@ describe('PluginsHomeSection (tag-driven)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    const more = screen.getByTestId('plugins-home-filter-more');
-    expect(more).toBeTruthy();
-    expect(screen.queryByTestId('plugins-home-filter-zz-late')).toBeNull();
-    fireEvent.click(more);
-    expect(screen.getByTestId('plugins-home-filter-zz-late')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('plugins-home-pill-surface-image'));
+    fireEvent.click(screen.getByTestId('plugins-home-chip-featured'));
+    const items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['star']);
   });
 });
