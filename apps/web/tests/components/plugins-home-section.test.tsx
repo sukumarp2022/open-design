@@ -2,16 +2,18 @@
 
 // Plugins home section — UI contract.
 //
-// The section renders a single curated workflow bar (Import / Create /
-// Export / Refine / Extend). Picking a category filters the grid; the
-// All pill clears the category filter. A Featured chip sits orthogonal
-// to the row and overrides the category selection. This suite locks in:
+// The section renders a curated workflow bar (Import / Create / Export /
+// Refine / Extend) plus a scoped child row for the active lane. Picking
+// a category filters the grid; the All pill clears the category filter.
+// A Featured chip sits orthogonal to the row and overrides the category
+// selection. This suite locks in:
 //
 //   1. The category row renders with All + the curated buckets that
 //      have at least one plugin.
 //   2. Picking a category filters the grid to plugins in that
 //      bucket.
-//   3. Concrete create types do not duplicate the Create parent as tabs.
+//   3. Concrete create types appear in the scoped child row, not as
+//      peers of Create.
 //   4. Featured chip overrides the category selection and only shows
 //      curator-promoted plugins.
 
@@ -99,6 +101,13 @@ describe('PluginsHomeSection (category bar)', () => {
     expect(screen.queryByTestId('plugins-home-pill-category-video')).toBeNull();
     expect(screen.queryByTestId('plugins-home-pill-category-image')).toBeNull();
     expect(screen.queryByTestId('plugins-home-pill-category-react')).toBeNull();
+    expect(screen.getByTestId('plugins-home-row-subcategory-create')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-subcategory-create-prototype')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-subcategory-create-deck')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-subcategory-create-design-system')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-subcategory-create-hyperframes')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-subcategory-create-image')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-subcategory-create-video')).toBeTruthy();
     // Surface / Type / Scenario rows and the More disclosure are gone.
     expect(screen.queryByTestId('plugins-home-row-surface')).toBeNull();
     expect(screen.queryByTestId('plugins-home-row-type')).toBeNull();
@@ -163,6 +172,27 @@ describe('PluginsHomeSection (category bar)', () => {
     fireEvent.click(screen.getByTestId('plugins-home-pill-category-import'));
     items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['g']);
+  });
+
+  it('subcategory pills filter within the active workflow lane', () => {
+    render(
+      <PluginsHomeSection
+        plugins={sample}
+        loading={false}
+        activePluginId={null}
+        pendingApplyId={null}
+        onUse={() => {}}
+        onOpenDetails={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('plugins-home-pill-subcategory-create-deck'));
+    let items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['f']);
+
+    fireEvent.click(screen.getByTestId('plugins-home-pill-subcategory-create-all'));
+    fireEvent.click(screen.getByTestId('plugins-home-pill-subcategory-create-hyperframes'));
+    items = within(screen.getByRole('list')).getAllByRole('listitem');
+    expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['e']);
   });
 
   it('Extend separates plugin authoring from normal creation', () => {

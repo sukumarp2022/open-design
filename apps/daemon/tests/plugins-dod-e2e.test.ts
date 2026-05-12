@@ -342,6 +342,22 @@ describe('Plan §8 e2e — daemon-side anchors', () => {
     }
   });
 
+  it('accepts legacy inputs alias when resolving plugin snapshots', async () => {
+    await installLocal(FIXTURE_DIR);
+
+    const result = resolvePluginSnapshot({
+      db,
+      body: { pluginId: 'sample-plugin', inputs: { topic: 'demo' } },
+      projectId: 'project-1',
+      registry: REGISTRY_VIEW,
+    });
+
+    expect(result?.ok).toBe(true);
+    if (result?.ok) {
+      expect(result.snapshot.inputs).toMatchObject({ topic: 'demo' });
+    }
+  });
+
   it('capabilitiesRequiredError envelope shape stays stable for code agents', () => {
     const err = capabilitiesRequiredError({
       pluginId: 'sample',

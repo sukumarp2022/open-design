@@ -251,6 +251,10 @@
   gap: 8px;
   padding: 4px 0;
 }
+.plugins-home__facet-row--sub {
+  padding-top: 0;
+  opacity: 0.92;
+}
 .plugins-home__facet-row--inline .plugins-home__facet-pills {
   flex: 1;
   flex-wrap: nowrap;
@@ -327,6 +331,10 @@
 .plugins-home__pill--all.is-active .plugins-home__pill-count {
   color: white;
   opacity: 0.85;
+}
+.plugins-home__pill--sub-all {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
 }
 
 .plugins-home__empty--filtered {

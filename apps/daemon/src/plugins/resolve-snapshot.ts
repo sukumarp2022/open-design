@@ -121,9 +121,12 @@ function pickPluginFields(body: Record<string, unknown> | null | undefined) {
     && body.appliedPluginSnapshotId.trim().length > 0
     ? body.appliedPluginSnapshotId.trim()
     : undefined;
-  const pluginInputs = body.pluginInputs && typeof body.pluginInputs === 'object'
-    ? (body.pluginInputs as Record<string, unknown>)
-    : {};
+  const pluginInputs =
+    body.pluginInputs && typeof body.pluginInputs === 'object'
+      ? (body.pluginInputs as Record<string, unknown>)
+      : body.inputs && typeof body.inputs === 'object'
+        ? (body.inputs as Record<string, unknown>)
+        : {};
   const grantCaps = Array.isArray(body.grantCaps)
     ? (body.grantCaps as unknown[])
         .filter((c): c is string => typeof c === 'string')
