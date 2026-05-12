@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { APP_CHROME_FILE_ACTIONS_ID } from './AppChromeHeader';
 import { MarkdownRenderer, artifactRendererRegistry } from '../artifacts/renderer-registry';
@@ -59,7 +59,7 @@ import type {
 import { Icon } from './Icon';
 import { Toast } from './Toast';
 import { PaletteTweaks, type PaletteId } from './PaletteTweaks';
-import { PreviewDrawOverlay } from './PreviewDrawOverlay';
+import { PreviewDrawOverlay, type PreviewDrawMode } from './PreviewDrawOverlay';
 import {
   buildBoardCommentAttachments,
   commentsToAttachments,
@@ -83,7 +83,7 @@ import {
   readManualEditOuterHtml,
   readManualEditStyles,
 } from '../edit-mode/source-patches';
-import type { ManualEditBridgeMessage, ManualEditHistoryEntry, ManualEditPatch, ManualEditTarget } from '../edit-mode/types';
+import type { ManualEditBridgeMessage, ManualEditHistoryEntry, ManualEditPatch, ManualEditStyles, ManualEditTarget } from '../edit-mode/types';
 import { isRenderableSketchJson, SketchPreview } from './SketchPreview';
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
@@ -3183,12 +3183,15 @@ function ReactComponentViewer({
         {source === null || (mode === 'preview' && !srcDoc) ? (
           <div className="viewer-empty">{t('fileViewer.loading')}</div>
         ) : mode === 'preview' ? (
-          <iframe
-            data-testid="react-component-preview-frame"
-            title={file.name}
-            sandbox="allow-scripts"
-            srcDoc={srcDoc}
-          />
+          <PreviewDrawOverlay>
+            <iframe
+              data-testid="react-component-preview-frame"
+              title={file.name}
+              sandbox="allow-scripts"
+              srcDoc={srcDoc}
+              style={{ width: '100%', height: '100%', border: 0 }}
+            />
+          </PreviewDrawOverlay>
         ) : (
           <CodeWithLines text={source} />
         )}
@@ -3350,14 +3353,24 @@ function HtmlViewer({
   const [inTabPresent, setInTabPresent] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [boardMode, setBoardMode] = useState(false);
-  const [boardTool, setBoardTool] = useState<BoardTool>('inspect');
+  const boardTool: BoardTool = 'inspect';
   const [inspectMode, setInspectMode] = useState(false);
   const [palettePopoverOpen, setPalettePopoverOpen] = useState(false);
   const [selectedPalette, setSelectedPalette] = useState<PaletteId | null>(null);
   const [previewPalette, setPreviewPalette] = useState<PaletteId | null>(null);
+  const [drawOverlayOpen, setDrawOverlayOpen] = useState(false);
+  const [drawOverlayMode, setDrawOverlayMode] = useState<PreviewDrawMode>('click');
   // for hint managing hint box state
   const [openHintBox, setOpenHintBox] = useState(true);
-  const [manualEditMode, setManualEditMode] = useState(false);
+  const [manualEditMode, setManualEditModeRaw] = useState(false);
+  const [manualEditFrozenSource, setManualEditFrozenSource] = useState<string | null>(null);
+  const setManualEditMode = useCallback((next: boolean | ((prev: boolean) => boolean)) => {
+    setManualEditModeRaw((prev) => {
+      const value = typeof next === 'function' ? (next as (p: boolean) => boolean)(prev) : next;
+      if (value !== prev && !value) setManualEditFrozenSource(null);
+      return value;
+    });
+  }, []);
   const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([]);
   const [selectedManualEditTarget, setSelectedManualEditTarget] = useState<ManualEditTarget | null>(null);
   const [manualEditDraft, setManualEditDraft] = useState<ManualEditDraft>(() => emptyManualEditDraft());
@@ -3588,7 +3601,20 @@ function HtmlViewer({
     return /class\s*=\s*['"][^'"]*\bslide\b/i.test(source);
   }, [source]);
   const effectiveDeck = isDeck || looksLikeDeck;
-  const previewSource = inlinedSource ?? source;
+  const livePreviewSource = inlinedSource ?? source;
+  // Freeze the iframe input on the snapshot taken at Edit-mode entry. Any
+  // source rewrite during edit (1.5s debounced set-style patches) stays
+  // invisible to the iframe — live updates flow through od-edit-preview-style
+  // postMessage instead, so the canvas never has to reload.
+  useEffect(() => {
+    if (manualEditMode && manualEditFrozenSource === null && livePreviewSource != null) {
+      setManualEditFrozenSource(livePreviewSource);
+    }
+  }, [manualEditMode, manualEditFrozenSource, livePreviewSource]);
+  const previewSource = (manualEditMode && manualEditFrozenSource !== null)
+    ? manualEditFrozenSource
+    : livePreviewSource;
+  const drawClickSelectionMode = drawOverlayOpen && drawOverlayMode === 'click' && !manualEditMode;
   // When we URL-load the iframe directly, skip every in-host inlining /
   // srcDoc-rebuilding step. The browser does the asset resolution itself,
   // which is the whole point of the URL-load path.
@@ -3598,6 +3624,7 @@ function HtmlViewer({
     commentMode: boardMode || manualEditMode,
     inspectMode,
     paletteActive: palettePopoverOpen || selectedPalette !== null,
+    drawMode: drawOverlayOpen,
     forceInline,
   });
   const previewSrcUrl = useMemo(
@@ -3623,13 +3650,13 @@ function HtmlViewer({
       deck: effectiveDeck,
       baseHref: projectRawUrl(projectId, baseDirFor(file.name)),
       initialSlideIndex: htmlPreviewSlideState.get(previewStateKey)?.active ?? 0,
-      commentBridge: boardMode && !manualEditMode,
+      commentBridge: (boardMode && !manualEditMode) || drawClickSelectionMode,
       inspectBridge: inspectMode,
       editBridge: manualEditMode,
       paletteBridge: true,
       initialPalette: selectedPalette,
     }) : ''),
-    [previewSource, effectiveDeck, projectId, file.name, previewStateKey, boardMode, manualEditMode, inspectMode, selectedPalette],
+    [previewSource, effectiveDeck, projectId, file.name, previewStateKey, boardMode, manualEditMode, drawClickSelectionMode, inspectMode, selectedPalette],
   );
 
   useEffect(() => {
@@ -3656,8 +3683,12 @@ function HtmlViewer({
   useEffect(() => {
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
-    win.postMessage({ type: 'od:comment-mode', enabled: boardMode, mode: boardTool }, '*');
-  }, [boardMode, boardTool, srcDoc]);
+    win.postMessage({
+      type: 'od:comment-mode',
+      enabled: boardMode || drawClickSelectionMode,
+      mode: drawClickSelectionMode ? 'picker' : boardTool,
+    }, '*');
+  }, [boardMode, boardTool, drawClickSelectionMode, srcDoc]);
 
   useEffect(() => {
     const win = iframeRef.current?.contentWindow;
@@ -3665,10 +3696,20 @@ function HtmlViewer({
     win.postMessage({ type: 'od-edit-mode', enabled: manualEditMode }, '*');
   }, [manualEditMode, srcDoc]);
 
+  const previewStyleToIframe = useCallback((id: string, styles: Partial<ManualEditStyles>) => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage({ type: 'od-edit-preview-style', id, styles }, '*');
+  }, []);
+
   function syncBridgeModes() {
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
-    win.postMessage({ type: 'od:comment-mode', enabled: boardMode, mode: boardTool }, '*');
+    win.postMessage({
+      type: 'od:comment-mode',
+      enabled: boardMode || drawClickSelectionMode,
+      mode: drawClickSelectionMode ? 'picker' : boardTool,
+    }, '*');
     win.postMessage({ type: 'od-edit-mode', enabled: manualEditMode }, '*');
   }
 
@@ -3697,7 +3738,7 @@ function HtmlViewer({
   // artifacts) because the comment-mode listener short-circuits on
   // `!boardMode`. Issue #890.
   useEffect(() => {
-    if (!inspectMode && !boardMode) {
+    if (!inspectMode && !boardMode && !drawClickSelectionMode) {
       setLiveCommentTargets((current) => (current.size > 0 ? new Map() : current));
       return;
     }
@@ -3735,7 +3776,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [inspectMode, boardMode, file.name]);
+  }, [inspectMode, boardMode, drawClickSelectionMode, file.name]);
 
   useEffect(() => {
     setActiveCommentTarget(null);
@@ -3794,7 +3835,8 @@ function HtmlViewer({
   }, [source]);
 
   useEffect(() => {
-    if (!boardMode) {
+    const selectionMode = boardMode || drawClickSelectionMode;
+    if (!selectionMode) {
       setActiveCommentTarget((current) => (current ? null : current));
       setHoveredCommentTarget((current) => (current ? null : current));
       setLiveCommentTargets((current) => (current.size > 0 ? new Map() : current));
@@ -3868,8 +3910,10 @@ function HtmlViewer({
         setActiveCommentTarget(snapshot);
         setHoveredCommentTarget(snapshot);
         setLiveCommentTargets((current) => new Map(current).set(snapshot.elementId, snapshot));
-        setCommentDraft(existing?.note ?? '');
-        setQueuedBoardNotes([]);
+        if (boardMode) {
+          setCommentDraft(existing?.note ?? '');
+          setQueuedBoardNotes([]);
+        }
         return;
       }
       if (data.type === 'od:pod-clear') {
@@ -3909,7 +3953,7 @@ function HtmlViewer({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [boardMode, file.name, previewComments]);
+  }, [boardMode, drawClickSelectionMode, file.name, previewComments]);
 
   useEffect(() => {
     if (!manualEditMode) {
@@ -4521,14 +4565,6 @@ function HtmlViewer({
     setStrokePoints([]);
   }
 
-  function activateBoard(nextTool?: BoardTool) {
-    setMode('preview');
-    setBoardMode(true);
-    if (nextTool) {
-      setBoardTool(nextTool);
-    }
-  }
-
   function queueCurrentDraft() {
     const note = commentDraft.trim();
     if (!note) return;
@@ -4573,7 +4609,6 @@ function HtmlViewer({
   const canShare = source !== null;
   const exportTitle = file.name.replace(/\.html?$/i, '') || file.name;
   const canPptx = canShare && Boolean(onExportAsPptx) && !streaming;
-  const boardAvailable = source !== null;
   const visibleSideComments = previewComments.filter(
     (comment) => comment.filePath === file.name && comment.status === 'open',
   );
@@ -4692,7 +4727,10 @@ function HtmlViewer({
             </button>
             <button
               className={`viewer-tab ${mode === 'source' ? 'active' : ''}`}
-              onClick={() => setMode('source')}
+              onClick={() => {
+                setDrawOverlayOpen(false);
+                setMode('source');
+              }}
             >
               {t('fileViewer.source')}
             </button>
@@ -4771,77 +4809,6 @@ function HtmlViewer({
             />
           </div>
           <button
-            type="button"
-            className={`viewer-action viewer-comment-toggle${boardMode ? ' active' : ''}`}
-            data-testid="board-mode-toggle"
-            title="Comment"
-            aria-pressed={boardMode}
-            disabled={!boardAvailable}
-            onClick={() => {
-              if (boardMode) {
-                setBoardMode(false);
-                clearBoardComposer();
-                return;
-              }
-              setManualEditMode(false);
-              activateBoard(boardTool);
-            }}
-          >
-            <Icon name="comment" size={13} />
-            <span>Comment</span>
-          </button>
-          {boardMode ? (
-            <>
-              <button
-                className={`viewer-action${boardTool === 'inspect' ? ' active' : ''}`}
-                type="button"
-                data-testid="comment-mode-toggle"
-                disabled={!boardAvailable}
-                title="Pick one element"
-                aria-label="Picker"
-                aria-pressed={boardTool === 'inspect'}
-                onClick={() => activateBoard('inspect')}
-              >
-                <Icon name="edit" size={13} />
-                <span>Picker</span>
-              </button>
-              <button
-                className={`viewer-action${boardTool === 'pod' ? ' active' : ''}`}
-                type="button"
-                disabled={!boardAvailable}
-                title="Draw a pod selection"
-                aria-label="Pods"
-                aria-pressed={boardTool === 'pod'}
-                onClick={() => activateBoard('pod')}
-              >
-                <Icon name="draw" size={13} />
-                <span>Pods</span>
-              </button>
-            </>
-          ) : null}
-          <button
-            className={`viewer-action${inspectMode ? ' active' : ''}`}
-            type="button"
-            data-testid="inspect-mode-toggle"
-            title="Inspect"
-            aria-pressed={inspectMode}
-            onClick={() => {
-              setInspectMode((v) => {
-                const next = !v;
-                if (next) {
-                  setBoardMode(false);
-                  clearBoardComposer();
-                  setManualEditMode(false);
-                  setOpenHintBox(true);
-                }
-                return next;
-              });
-            }}
-          >
-            <Icon name="tweaks" size={13} />
-            <span>Inspect</span>
-          </button>
-          <button
             className={`viewer-action${manualEditMode ? ' active' : ''}`}
             type="button"
             data-testid="manual-edit-mode-toggle"
@@ -4852,6 +4819,7 @@ function HtmlViewer({
                 setBoardMode(false);
                 clearBoardComposer();
                 setInspectMode(false);
+                setDrawOverlayOpen(false);
                 setMode('preview');
               }
               setManualEditMode((value) => !value);
@@ -4859,6 +4827,28 @@ function HtmlViewer({
           >
             <Icon name="edit" size={13} />
             <span>{t('fileViewer.edit')}</span>
+          </button>
+          <button
+            className={`viewer-action${drawOverlayOpen ? ' active' : ''}`}
+            type="button"
+            data-testid="draw-overlay-toggle"
+            title={t('fileViewer.draw')}
+            aria-pressed={drawOverlayOpen}
+            onClick={() => {
+              const next = !drawOverlayOpen;
+              if (next) {
+                setManualEditMode(false);
+                setBoardMode(false);
+                clearBoardComposer();
+                setInspectMode(false);
+                setDrawOverlayMode('draw');
+                setMode('preview');
+              }
+              setDrawOverlayOpen(next);
+            }}
+          >
+            <Icon name="draw" size={13} />
+            <span>{t('fileViewer.draw')}</span>
           </button>
           <span className="viewer-divider" aria-hidden />
           <PreviewViewportControls
@@ -5135,6 +5125,7 @@ function HtmlViewer({
                 busy={manualEditSaving}
                 onSelectTarget={selectManualEditTarget}
                 onDraftChange={setManualEditDraft}
+                onPreviewStyle={previewStyleToIframe}
                 onApplyPatch={(patch, label) => {
                   void applyManualEdit(patch, label);
                 }}
@@ -5154,41 +5145,46 @@ function HtmlViewer({
               <div
                 style={previewScaleShellStyle(previewViewport, previewScale)}
               >
-                {useUrlLoadPreview ? (
-                  <iframe
-                    ref={iframeRef}
-                    data-testid="artifact-preview-frame"
-                    data-od-render-mode="url-load"
-                    title={file.name}
-                    sandbox="allow-scripts"
-                    src={previewSrcUrl}
-                    onLoad={syncBridgeModes}
-                  />
-                ) : (
-                  <iframe
-                    ref={iframeRef}
-                    data-testid="artifact-preview-frame"
-                    data-od-render-mode="srcdoc"
-                    title={file.name}
-                    sandbox="allow-scripts"
-                    srcDoc={srcDoc}
-                    // Re-seeds the iframe-side bridge with the host's
-                    // authoritative inspect override map after each srcdoc
-                    // rebuild, then syncs comment/edit bridge modes.
-                    // URL-loaded iframes have no inspect bridge, so the
-                    // replay handler is intentionally only on the srcDoc
-                    // branch.
-                    onLoad={() => {
-                      replayInspectOverridesToIframe();
-                      syncBridgeModes();
-                    }}
-                  />
-                )}
+                <PreviewDrawOverlay
+                  active={drawOverlayOpen}
+                  onActiveChange={setDrawOverlayOpen}
+                  onModeChange={setDrawOverlayMode}
+                  captureTarget={drawClickSelectionMode ? activeCommentTarget : null}
+                  sendDisabled={streaming}
+                  sendDisabledReason="当前正有任务在执行"
+                >
+                  {useUrlLoadPreview ? (
+                    <iframe
+                      ref={iframeRef}
+                      data-testid="artifact-preview-frame"
+                      data-od-render-mode="url-load"
+                      title={file.name}
+                      sandbox="allow-scripts"
+                      src={previewSrcUrl}
+                      onLoad={syncBridgeModes}
+                      style={{ width: '100%', height: '100%', border: 0 }}
+                    />
+                  ) : (
+                    <iframe
+                      ref={iframeRef}
+                      data-testid="artifact-preview-frame"
+                      data-od-render-mode="srcdoc"
+                      title={file.name}
+                      sandbox="allow-scripts"
+                      srcDoc={srcDoc}
+                      onLoad={() => {
+                        replayInspectOverridesToIframe();
+                        syncBridgeModes();
+                      }}
+                      style={{ width: '100%', height: '100%', border: 0 }}
+                    />
+                  )}
+                </PreviewDrawOverlay>
               </div>
             </div>
-            {boardMode ? (
+            {(boardMode || drawClickSelectionMode) ? (
               <CommentPreviewOverlays
-                comments={previewComments}
+                comments={boardMode ? previewComments : []}
                 liveTargets={liveCommentTargets}
                 hoveredTarget={hoveredCommentTarget}
                 activeTarget={activeCommentTarget}
