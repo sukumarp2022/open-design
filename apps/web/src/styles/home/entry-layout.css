@@ -270,19 +270,20 @@
 }
 .entry-main__inner {
   width: 100%;
-  max-width: 960px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 32px 32px 64px;
   display: flex;
   flex-direction: column;
   gap: 32px;
 }
-/* Wider variant for grid-heavy entry sub-views (Projects, Design
-   systems). The home/hero view stays at the narrower 960px so the
-   centered prompt reads as a single intentional column, but the
-   list views breathe out to fill the available scroll column. */
+/* Wider variant retained for the Projects / Design systems
+   sub-views that historically opted into a wider canvas. The
+   home view now also breathes out to ~1440px so the plugins
+   gallery can fit 4-5 preview tiles per row on desktop displays
+   while the hero card self-constrains to a readable column. */
 .entry-main__inner--wide {
-  max-width: 1280px;
+  max-width: 1440px;
 }
 
 /* Floating top-right control inside the main scroll area. Stays

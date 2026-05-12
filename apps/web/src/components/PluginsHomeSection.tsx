@@ -59,9 +59,9 @@ export function PluginsHomeSection({
     <section className="plugins-home" data-testid="plugins-home-section">
       <header className="plugins-home__head">
         <div className="plugins-home__heading">
-          <h2 className="plugins-home__title">Plugins</h2>
+          <h2 className="plugins-home__title">Community</h2>
           <p className="plugins-home__subtitle">
-            Built-in catalog — pick one to load a starter prompt, or type freely above.
+            Things you can do and tasks to complete — packaged as plugins. Pick one to load a starter prompt, or type freely above.
           </p>
         </div>
         <span className="plugins-home__count">

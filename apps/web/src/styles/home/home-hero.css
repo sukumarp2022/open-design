@@ -6,6 +6,14 @@
   flex-direction: column;
   gap: 36px;
 }
+/* The hero block self-constrains to a readable column even though
+   its parent now stretches to ~1440px so the plugin gallery can
+   spread out. Recent projects + plugins-home keep full width. */
+.home-view > .home-hero {
+  align-self: center;
+  width: 100%;
+  max-width: 960px;
+}
 
 /* Hero — large centered prompt input */
 .home-hero {

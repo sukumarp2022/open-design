@@ -1,7 +1,11 @@
 /* ============================================================
-   Plugins home section — category filter pills (with Featured as
-   the first pill) + responsive plugin card grid. Renders on the
-   Home view below the hero and recent projects strip.
+   Plugins home section — gallery layout.
+
+   The gallery now renders large preview tiles (image / video /
+   sandboxed HTML / design-system patch) instead of text-only
+   cards, so the home view reads more like a Lovart-style
+   inspiration board. The faceted filter row above the grid is
+   unchanged; only the card visuals + grid sizing changed.
    ============================================================ */
 .plugins-home {
   display: flex;
@@ -57,8 +61,8 @@
 /* ============================================================
    Faceted filter — three rows (Surface / Type / Scenario) with a
    leading axis label on the left and pills wrapping on the right.
-   The Featured chip lives in a smaller mode strip above the rows so
-   it reads as orthogonal to the facet selections it overrides.
+   The Featured chip lives in a smaller mode strip above the rows
+   so it reads as orthogonal to the facet selections it overrides.
    ============================================================ */
 .plugins-home__mode {
   display: flex;
@@ -217,40 +221,355 @@
   }
 }
 
-/* Card grid */
+/* ============================================================
+   Card grid — fluid columns sized so a 1440px home view fits
+   four to five tiles per row on desktop, while still falling back
+   to two-up on tablet and one-up on phones.
+   ============================================================ */
 .plugins-home__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
+@media (min-width: 1100px) {
+  .plugins-home__grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+@media (min-width: 1400px) {
+  .plugins-home__grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
 .plugins-home__card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-panel);
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  overflow: hidden;
+  transition: border-color 120ms ease, box-shadow 160ms ease,
+    transform 160ms ease;
+  isolation: isolate;
 }
 .plugins-home__card:hover {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-xs);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-md, 0 12px 32px rgba(0, 0, 0, 0.08));
+  transform: translateY(-2px);
 }
 .plugins-home__card.is-active {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
 .plugins-home__card.is-featured {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-  background: linear-gradient(180deg, var(--accent-tint) 0%, var(--bg-panel) 50%);
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
 }
-.plugins-home__card-head {
+
+/* ---------- Hero preview surface ---------- */
+.plugins-home__preview {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+.plugins-home__preview--design,
+.plugins-home__preview--text {
+  background: transparent;
+}
+
+/* Image / video */
+.plugins-home__media {
+  position: absolute;
+  inset: 0;
+}
+.plugins-home__media-img,
+.plugins-home__media-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.plugins-home__media-video {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.plugins-home__media-skeleton {
+  width: 100%;
+  height: 100%;
+  background:
+    linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.5) 50%, transparent 70%) 0 0 / 200% 100%,
+    var(--bg-subtle);
+  animation: plugins-home-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes plugins-home-shimmer {
+  to {
+    background-position: -200% 0, 0 0;
+  }
+}
+.plugins-home__media-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Sandboxed HTML iframe — scaled-down "thumbnail" of a real page */
+.plugins-home__html {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+}
+.plugins-home__html-frame {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+}
+.plugins-home__html-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1440px;
+  height: 1080px;
+  border: 0;
+  transform: scale(0.22);
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.plugins-home__html-skeleton {
+  position: absolute;
+  inset: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.plugins-home__html-skeleton span {
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-subtle), var(--border-soft), var(--bg-subtle));
+  background-size: 200% 100%;
+  animation: plugins-home-shimmer 1.6s ease-in-out infinite;
+}
+.plugins-home__html-skeleton span:nth-child(1) { width: 70%; }
+.plugins-home__html-skeleton span:nth-child(2) { width: 90%; }
+.plugins-home__html-skeleton span:nth-child(3) { width: 55%; }
+.plugins-home__html-chrome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-subtle);
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.plugins-home__html-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+.plugins-home__html-dot:nth-child(1) { background: #ff5f57; }
+.plugins-home__html-dot:nth-child(2) { background: #febc2e; }
+.plugins-home__html-dot:nth-child(3) { background: #28c840; }
+.plugins-home__html-url {
+  margin-left: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Design-system synthesised tile */
+.plugins-home__design {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 18px 14px;
+  font-family: var(--serif);
+  overflow: hidden;
+}
+.plugins-home__design::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.18));
+  pointer-events: none;
+}
+.plugins-home__design-headline {
+  position: relative;
+  font-size: 18px;
+  line-height: 1.18;
+  font-weight: 500;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  z-index: 1;
+}
+.plugins-home__design-headline strong {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.plugins-home__design-specimen {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  font-size: 26px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.86);
+  z-index: 1;
+}
+.plugins-home__design-swatches {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+.plugins-home__design-swatches span {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* Text fallback */
+.plugins-home__text-surface {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--accent-tint) 0%, var(--bg-subtle) 100%);
+}
+.plugins-home__text-glyph {
+  font-family: var(--serif);
+  font-size: 56px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Hover overlay (mask) ----------
+   The overlay floats over the preview surface on hover/focus,
+   surfacing description, tags, and primary actions without
+   stealing the resting state. Mirrors the lightbox-style
+   reveal Lovart and similar galleries use.
+   --------------------------------------------------------- */
+.plugins-home__card-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.0) 0%, rgba(0, 0, 0, 0.42) 55%, rgba(0, 0, 0, 0.78) 100%);
+  color: white;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+  z-index: 3;
+}
+.plugins-home__card:hover .plugins-home__card-overlay,
+.plugins-home__card:focus-within .plugins-home__card-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+.plugins-home__card-overlay-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+}
+.plugins-home__overlay-featured {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.plugins-home__card-overlay-body {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
+  margin-top: auto;
+}
+.plugins-home__overlay-title {
+  font-weight: 600;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plugins-home__overlay-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.88);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.32);
+}
+.plugins-home__overlay-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.plugins-home__overlay-tag {
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.plugins-home__overlay-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* ---------- Resting metadata foot ----------
+   Always visible at the bottom of the card, showing title +
+   trust pill. The overlay's matching info supersedes this on
+   hover — keeping the foot small means cards still answer
+   "what is this?" before any pointer motion.
+   --------------------------------------------------------- */
+.plugins-home__card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 10px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-panel);
 }
 .plugins-home__card-title {
   display: inline-flex;
@@ -258,7 +577,7 @@
   gap: 4px;
   font-weight: 600;
   color: var(--text-strong);
-  font-size: 13.5px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -268,30 +587,8 @@
   flex: 0 0 auto;
   color: var(--accent);
 }
-.plugins-home__card-desc {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.plugins-home__card-meta {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  color: var(--text-faint);
-  font-size: 11px;
-}
-.plugins-home__card-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
 
-/* Trust pill */
+/* Trust pill — mirrors the project view styling. */
 .plugins-home__trust {
   font-size: 10.5px;
   padding: 1px 7px;
@@ -299,6 +596,7 @@
   background: var(--bg-subtle);
   color: var(--text-muted);
   text-transform: capitalize;
+  flex: 0 0 auto;
 }
 .plugins-home__trust.trust-bundled {
   background: var(--blue-bg);
@@ -312,8 +610,16 @@
   background: var(--amber-bg);
   color: var(--amber);
 }
+/* Inside the overlay the trust pill needs glassy chrome to read
+   over the dark gradient. */
+.plugins-home__card-overlay .plugins-home__trust {
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
 
-/* Card action buttons */
+/* Card action buttons — overlay variant */
 .plugins-home__action {
   appearance: none;
   display: inline-flex;
@@ -325,28 +631,40 @@
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease;
 }
 .plugins-home__action--primary {
   flex: 1;
-  background: var(--text);
-  color: var(--bg-panel);
-  border: 1px solid var(--text);
+  background: white;
+  color: #111;
+  border: 1px solid white;
 }
 .plugins-home__action--primary:hover:not(:disabled) {
-  background: var(--text-strong);
-  border-color: var(--text-strong);
+  background: #f3f3f3;
+  border-color: #f3f3f3;
 }
 .plugins-home__action--primary:disabled {
   opacity: 0.55;
   cursor: progress;
 }
 .plugins-home__action--secondary {
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.14);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 .plugins-home__action--secondary:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.24);
+  border-color: rgba(255, 255, 255, 0.48);
+}
+
+/* Touch/coarse-pointer fallback — overlays should be visible
+   without hover so phone/tablet users can still see metadata. */
+@media (hover: none) {
+  .plugins-home__card-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
