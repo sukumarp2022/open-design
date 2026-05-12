@@ -45,7 +45,7 @@
     },
     "useCase": {
       "query": {
-        "en": "Use this plugin for the following Chinese-language task: 帮我做一份杂志风的 PPT —— 关于'一人公司 · 被 AI 折叠的组织'，25 分钟分享会，目标受众是设计师 + 创业者。先推荐一个方向（Monocle / WIRED / Kinfolk / Domus / Lab）让我选。",
+        "en": "Create a magazine-style PPT about 'One-person companies: organizations folded by AI' for a 25-minute talk aimed at designers and founders. First recommend one direction for me to choose from: Monocle, WIRED, Kinfolk, Domus, or Lab.",
         "zh-CN": "帮我做一份杂志风的 PPT —— 关于'一人公司 · 被 AI 折叠的组织'，25 分钟分享会，目标受众是设计师 + 创业者。先推荐一个方向（Monocle / WIRED / Kinfolk / Domus / Lab）让我选。"
       }
     },

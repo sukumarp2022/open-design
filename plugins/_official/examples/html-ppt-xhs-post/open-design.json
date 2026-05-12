@@ -41,7 +41,7 @@
     },
     "useCase": {
       "query": {
-        "en": "Use this plugin for the following Chinese-language task: 帮我用 html-ppt-xhs-post 模板做一组 9 张小红书图文（3:4 竖版，810×1080）。先告诉我主题，然后帮我把封面 + 7 页内容 + 结尾 CTA 排好，每页一句标题 + 一段正文 + 关键词 sticker。",
+        "en": "Use the html-ppt-xhs-post template to create a set of 9 Xiaohongshu-style vertical posts (3:4, 810x1080). First ask me for the topic, then lay out the cover, 7 content pages, and closing CTA. Each page should have one headline, one paragraph, and keyword stickers.",
         "zh-CN": "帮我用 html-ppt-xhs-post 模板做一组 9 张小红书图文（3:4 竖版，810×1080）。先告诉我主题，然后帮我把封面 + 7 页内容 + 结尾 CTA 排好，每页一句标题 + 一段正文 + 关键词 sticker。"
       },
       "exampleOutputs": [

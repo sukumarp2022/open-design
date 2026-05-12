@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  resolveLocalizedText,
-  type ApplyResult,
-  type InstalledPluginRecord,
+import type {
+  ApplyResult,
+  InstalledPluginRecord,
 } from '@open-design/contracts';
 import {
   applyPlugin,
   listPlugins,
   renderPluginBriefTemplate,
+  resolvePluginQueryFallback,
 } from '../state/projects';
 import { useI18n } from '../i18n';
 import { Icon } from './Icon';
@@ -82,7 +82,7 @@ export function PluginLoopHome({ onSubmit }: Props) {
       if (field.default !== undefined) inputs[field.name] = field.default;
     }
     setActive({ record, result, inputs });
-    const query = result.query || resolveLocalizedText(record.manifest?.od?.useCase?.query, locale);
+    const query = result.query || resolvePluginQueryFallback(record.manifest?.od?.useCase?.query, locale);
     if (query) {
       setPrompt(renderPluginBriefTemplate(query, inputs));
     }

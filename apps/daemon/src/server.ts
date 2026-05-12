@@ -3622,6 +3622,7 @@ export async function startServer({
       try {
         const files = Array.isArray(req.files) ? req.files : [];
         if (files.length === 0) {
+          await fs.promises.rm(stagedFolder, { recursive: true, force: true }).catch(() => undefined);
           return res.status(400).json({ error: 'files are required' });
         }
         const rawPaths = req.body?.paths;

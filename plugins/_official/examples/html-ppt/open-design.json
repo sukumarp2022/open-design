@@ -47,7 +47,7 @@
     },
     "useCase": {
       "query": {
-        "en": "Use this plugin for the following Chinese-language task: 用 html-ppt 做一份 12 页的 HTML PPT。先帮我确认三件事：内容/页数/受众、主题（从 36 套里推荐 2-3 个）、起点全 deck 模板（pitch-deck / tech-sharing / weekly-report / xhs-post / presenter-mode-reveal 任选一个），对齐之后再开始写 slides。",
+        "en": "Use html-ppt to create a 12-page HTML PPT. First confirm three things with me: content/page count/audience, theme choice (recommend 2-3 from the 36 available themes), and the starting full-deck template (choose from pitch-deck, tech-sharing, weekly-report, xhs-post, or presenter-mode-reveal). After alignment, start writing the slides.",
         "zh-CN": "用 html-ppt 做一份 12 页的 HTML PPT。先帮我确认三件事：内容/页数/受众、主题（从 36 套里推荐 2-3 个）、起点全 deck 模板（pitch-deck / tech-sharing / weekly-report / xhs-post / presenter-mode-reveal 任选一个），对齐之后再开始写 slides。"
       }
     },

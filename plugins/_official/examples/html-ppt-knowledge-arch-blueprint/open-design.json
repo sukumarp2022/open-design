@@ -42,7 +42,7 @@
     },
     "useCase": {
       "query": {
-        "en": "Use this plugin for the following Chinese-language task: 用 html-ppt-knowledge-arch-blueprint 模板做一份系统架构介绍 PPT。奶油纸底 + 锈红高亮 + 蓝图网格 + pipeline 抬高一格 + 衬线大字。先告诉我系统名 + 5-7 个核心模块 + 数据流方向，再写 8-10 页。",
+        "en": "Use the html-ppt-knowledge-arch-blueprint template to create a system architecture introduction deck. Use a cream paper base, rust-red highlights, blueprint grid, raised pipeline blocks, and serif display type. First ask me for the system name, 5-7 core modules, and data-flow direction, then write 8-10 slides.",
         "zh-CN": "用 html-ppt-knowledge-arch-blueprint 模板做一份系统架构介绍 PPT。奶油纸底 + 锈红高亮 + 蓝图网格 + pipeline 抬高一格 + 衬线大字。先告诉我系统名 + 5-7 个核心模块 + 数据流方向，再写 8-10 页。"
       },
       "exampleOutputs": [

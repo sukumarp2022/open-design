@@ -40,7 +40,7 @@
     },
     "useCase": {
       "query": {
-        "en": "Use this plugin for the following Chinese-language task: 用 html-ppt-presenter-mode 模板做一份带逐字稿的演讲 PPT。先确认：演讲主题、时长（每页 2-3 分钟）、目标听众。然后帮我每页写 150-300 字的口语化逐字稿（不是讲稿，是提示信号），按 S 能打开 presenter 弹窗。",
+        "en": "Use the html-ppt-presenter-mode template to create a talk deck with speaker notes. First confirm the talk topic, duration (2-3 minutes per slide), and target audience. Then write 150-300 words of conversational presenter notes per slide (prompting signals, not a manuscript), with the presenter popup available via the S key.",
         "zh-CN": "用 html-ppt-presenter-mode 模板做一份带逐字稿的演讲 PPT。先确认：演讲主题、时长（每页 2-3 分钟）、目标听众。然后帮我每页写 150-300 字的口语化逐字稿（不是讲稿，是提示信号），按 S 能打开 presenter 弹窗。"
       },
       "exampleOutputs": [

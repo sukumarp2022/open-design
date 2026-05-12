@@ -7,6 +7,8 @@ import {
   listPlugins,
   type PluginInstallOutcome,
   type PluginMarketplace,
+  uploadPluginFolder,
+  uploadPluginZip,
 } from '../state/projects';
 import { Icon } from './Icon';
 import { PluginDetailsModal } from './PluginDetailsModal';
@@ -28,10 +30,11 @@ const PLUGINS_TABS: ReadonlyArray<{
   id: PluginsTab;
   label: string;
   hint: string;
+  disabled?: boolean;
 }> = [
   { id: 'community', label: 'Community', hint: 'Official catalog' },
-  { id: 'mine', label: 'My plugins', hint: 'User-installed' },
-  { id: 'marketplaces', label: 'Marketplaces', hint: 'Catalog sources' },
+  { id: 'mine', label: 'My plugins', hint: 'Coming soon', disabled: true },
+  { id: 'marketplaces', label: 'Marketplaces', hint: 'Coming soon', disabled: true },
   { id: 'team', label: 'Team / Enterprise', hint: 'Coming soon' },
 ];
 
@@ -41,9 +44,7 @@ export function PluginsView() {
   const [marketplaces, setMarketplaces] = useState<PluginMarketplace[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<PluginsTab>('community');
-  const [source, setSource] = useState('');
   const [importOpen, setImportOpen] = useState(false);
-  const [installing, setInstalling] = useState(false);
   const [pendingApplyId, setPendingApplyId] = useState<string | null>(null);
   const [activePlugin, setActivePlugin] = useState<{
     record: InstalledPluginRecord;
@@ -73,20 +74,15 @@ export function PluginsView() {
     [plugins],
   );
 
-  async function handleInstall() {
-    const trimmed = source.trim();
-    if (!trimmed) return;
-    setInstalling(true);
+  async function finishImport(work: () => Promise<PluginInstallOutcome>) {
     setNotice(null);
-    const outcome = await installPluginSource(trimmed);
-    setInstalling(false);
+    const outcome = await work();
     setNotice(outcome);
     if (outcome.ok) {
-      setSource('');
       setImportOpen(false);
       await refresh();
-      setActiveTab('mine');
     }
+    return outcome;
   }
 
   async function handleUsePlugin(record: InstalledPluginRecord) {
@@ -126,8 +122,8 @@ export function PluginsView() {
           <button
             type="button"
             className="plugins-view__primary"
-            onClick={() => setImportOpen((open) => !open)}
-            aria-expanded={importOpen}
+            onClick={() => setImportOpen(true)}
+            aria-haspopup="dialog"
             data-testid="plugins-import-button"
           >
             <Icon name="plus" size={13} />
@@ -146,15 +142,6 @@ export function PluginsView() {
         <StatCard label="Marketplaces" value={marketplaces.length} />
       </div>
 
-      {importOpen ? (
-        <ImportPanel
-          source={source}
-          installing={installing}
-          onSourceChange={setSource}
-          onInstall={handleInstall}
-        />
-      ) : null}
-
       <nav className="plugins-view__tabs" role="tablist" aria-label="Plugin areas">
         {PLUGINS_TABS.map((tab) => {
           const active = tab.id === activeTab;
@@ -164,8 +151,18 @@ export function PluginsView() {
               type="button"
               role="tab"
               aria-selected={active}
-              className={`plugins-view__tab${active ? ' is-active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
+              aria-disabled={tab.disabled ? 'true' : undefined}
+              disabled={tab.disabled}
+              className={[
+                'plugins-view__tab',
+                active ? ' is-active' : '',
+                tab.disabled ? ' is-disabled' : '',
+              ]
+                .filter(Boolean)
+                .join('')}
+              onClick={() => {
+                if (!tab.disabled) setActiveTab(tab.id);
+              }}
               data-testid={`plugins-tab-${tab.id}`}
             >
               <span className="plugins-view__tab-label">{tab.label}</span>
@@ -221,6 +218,14 @@ export function PluginsView() {
           onClose={() => setDetailsRecord(null)}
           onUse={(record) => void handleUsePlugin(record)}
           isApplying={pendingApplyId === detailsRecord.id}
+        />
+      ) : null}
+      {importOpen ? (
+        <PluginImportModal
+          onClose={() => setImportOpen(false)}
+          onInstallSource={(source) => finishImport(() => installPluginSource(source))}
+          onUploadZip={(file) => finishImport(() => uploadPluginZip(file))}
+          onUploadFolder={(files) => finishImport(() => uploadPluginFolder(files))}
         />
       ) : null}
     </section>
@@ -301,90 +306,272 @@ function MarketplacesPanel({ marketplaces }: { marketplaces: PluginMarketplace[]
   );
 }
 
-function ImportPanel({
-  source,
-  installing,
-  onSourceChange,
-  onInstall,
+type ImportKind = 'github' | 'zip' | 'folder' | 'template';
+
+function PluginImportModal({
+  onClose,
+  onInstallSource,
+  onUploadZip,
+  onUploadFolder,
 }: {
-  source: string;
-  installing: boolean;
-  onSourceChange: (value: string) => void;
-  onInstall: () => void;
+  onClose: () => void;
+  onInstallSource: (source: string) => Promise<PluginInstallOutcome>;
+  onUploadZip: (file: File) => Promise<PluginInstallOutcome>;
+  onUploadFolder: (files: File[]) => Promise<PluginInstallOutcome>;
 }) {
+  const [kind, setKind] = useState<ImportKind>('github');
+  const [source, setSource] = useState('');
+  const [zipFile, setZipFile] = useState<File | null>(null);
+  const [folderFiles, setFolderFiles] = useState<File[]>([]);
+  const [working, setWorking] = useState(false);
+
+  async function runImport() {
+    setWorking(true);
+    try {
+      if (kind === 'github') {
+        const trimmed = source.trim();
+        if (trimmed) await onInstallSource(trimmed);
+      } else if (kind === 'zip' && zipFile) {
+        await onUploadZip(zipFile);
+      } else if (kind === 'folder' && folderFiles.length > 0) {
+        await onUploadFolder(folderFiles);
+      }
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  const canSubmit =
+    (kind === 'github' && source.trim().length > 0) ||
+    (kind === 'zip' && zipFile !== null) ||
+    (kind === 'folder' && folderFiles.length > 0);
+
   return (
-    <section className="plugins-view__section plugins-view__import" aria-labelledby="plugins-import-title">
-      <div className="plugins-view__section-head">
-        <div>
-          <h2 id="plugins-import-title">Create or import a plugin</h2>
-          <p>
-            Install into the user plugin registry from the sources the daemon
-            already understands.
-          </p>
-        </div>
-      </div>
-      <div className="plugins-view__install-card">
-        <label htmlFor="plugin-source">Plugin source</label>
-        <div className="plugins-view__source-row">
-          <input
-            id="plugin-source"
-            value={source}
-            onChange={(event) => onSourceChange(event.target.value)}
-            placeholder="github:owner/repo@main/plugins/my-plugin"
-            disabled={installing}
-          />
+    <div className="plugins-import-modal__backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="plugins-import-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="plugins-import-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="plugins-import-modal__head">
+          <div>
+            <p className="plugins-view__kicker">User plugins</p>
+            <h2 id="plugins-import-title">Create or import a plugin</h2>
+          </div>
           <button
             type="button"
-            className="plugins-view__primary"
-            onClick={onInstall}
-            disabled={installing || source.trim().length === 0}
+            className="plugins-import-modal__close"
+            onClick={onClose}
+            aria-label="Close import dialog"
           >
-            {installing ? 'Installing…' : 'Install'}
+            <Icon name="close" size={16} />
           </button>
+        </header>
+
+        <nav className="plugins-import-modal__tabs" aria-label="Import source">
+          <ImportChoice
+            active={kind === 'github'}
+            icon="github"
+            title="From GitHub"
+            body="Install github:owner/repo paths."
+            onClick={() => setKind('github')}
+          />
+          <ImportChoice
+            active={kind === 'zip'}
+            icon="upload"
+            title="Upload zip"
+            body="Upload a plugin archive."
+            onClick={() => setKind('zip')}
+          />
+          <ImportChoice
+            active={kind === 'folder'}
+            icon="folder"
+            title="Upload folder"
+            body="Upload a plugin directory."
+            onClick={() => setKind('folder')}
+          />
+          <ImportChoice
+            active={kind === 'template'}
+            icon="edit"
+            title="Create from template"
+            body="Coming soon."
+            onClick={() => setKind('template')}
+          />
+        </nav>
+
+        <div className="plugins-import-modal__body">
+          {kind === 'github' ? (
+            <div className="plugins-view__install-card">
+              <label htmlFor="plugin-source">GitHub, archive, or marketplace source</label>
+              <div className="plugins-view__source-row">
+                <input
+                  id="plugin-source"
+                  value={source}
+                  onChange={(event) => setSource(event.target.value)}
+                  placeholder="github:owner/repo@main/plugins/my-plugin"
+                  disabled={working}
+                />
+                <button
+                  type="button"
+                  className="plugins-view__primary"
+                  onClick={runImport}
+                  disabled={working || !canSubmit}
+                >
+                  {working ? 'Importing…' : 'Import'}
+                </button>
+              </div>
+              <div className="plugins-view__source-help">
+                Supports <code>github:owner/repo[@ref][/subpath]</code>, HTTPS{' '}
+                <code>.tar.gz</code>/<code>.tgz</code> archives, or marketplace plugin names.
+              </div>
+            </div>
+          ) : null}
+
+          {kind === 'zip' ? (
+            <FileImportPanel
+              title="Upload zip"
+              body="Choose a .zip archive containing open-design.json, SKILL.md, or .claude-plugin/plugin.json."
+              accept=".zip,application/zip"
+              working={working}
+              fileLabel={zipFile?.name ?? 'No zip selected'}
+              onChange={(files) => setZipFile(files[0] ?? null)}
+              onImport={runImport}
+              canSubmit={canSubmit}
+            />
+          ) : null}
+
+          {kind === 'folder' ? (
+            <FileImportPanel
+              title="Upload folder"
+              body="Choose a plugin folder. Relative paths are preserved and installed into your user plugin registry."
+              working={working}
+              fileLabel={
+                folderFiles.length > 0
+                  ? `${folderFiles.length} file${folderFiles.length === 1 ? '' : 's'} selected`
+                  : 'No folder selected'
+              }
+              folder
+              onChange={setFolderFiles}
+              onImport={runImport}
+              canSubmit={canSubmit}
+            />
+          ) : null}
+
+          {kind === 'template' ? (
+            <section className="plugins-import-modal__coming">
+              <span className="plugins-view__future-icon" aria-hidden>
+                <Icon name="edit" size={18} />
+              </span>
+              <div>
+                <p className="plugins-view__kicker">Coming soon</p>
+                <h3>Create from template</h3>
+                <p>
+                  Template authoring will scaffold manifest metadata, examples,
+                  preview assets, and starter instructions in a future pass.
+                </p>
+              </div>
+            </section>
+          ) : null}
         </div>
-        <div className="plugins-view__source-help">
-          Supports <code>github:owner/repo[@ref][/subpath]</code>, daemon-local paths,
-          HTTPS <code>.tar.gz</code>/<code>.tgz</code> archives, or marketplace plugin names.
-        </div>
-      </div>
-      <div className="plugins-view__future-grid">
-        <FutureCard
-          icon="upload"
-          title="Upload zip"
-          body="Needs a browser upload endpoint that safely stages and scans archives before install."
-        />
-        <FutureCard
-          icon="folder"
-          title="Upload folder"
-          body="Browsers cannot hand the daemon a folder path directly; this needs an explicit upload flow."
-        />
-        <FutureCard
-          icon="edit"
-          title="Create from template"
-          body="Future plugin authoring can scaffold open-design.json, examples, and preview assets."
-        />
-      </div>
-    </section>
+
+        <footer className="plugins-import-modal__foot">
+          <p>
+            Imported plugins are user plugins and are stored separately from
+            bundled official plugins.
+          </p>
+          <button
+            type="button"
+            className="plugins-view__secondary"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+        </footer>
+      </section>
+    </div>
   );
 }
 
-function FutureCard({
+function ImportChoice({
+  active,
   icon,
   title,
   body,
+  onClick,
 }: {
-  icon: 'upload' | 'folder' | 'edit';
+  active: boolean;
+  icon: 'github' | 'upload' | 'folder' | 'edit';
   title: string;
   body: string;
+  onClick: () => void;
 }) {
   return (
-    <article className="plugins-view__future-card" aria-disabled="true">
-      <span className="plugins-view__future-icon" aria-hidden>
+    <button
+      type="button"
+      className={`plugins-import-modal__choice${active ? ' is-active' : ''}`}
+      onClick={onClick}
+    >
+      <span className="plugins-import-modal__choice-icon" aria-hidden>
         <Icon name={icon} size={16} />
       </span>
-      <h3>{title}</h3>
-      <p>{body}</p>
-    </article>
+      <span className="plugins-import-modal__choice-copy">
+        <span>{title}</span>
+        <span>{body}</span>
+      </span>
+    </button>
+  );
+}
+
+function FileImportPanel({
+  title,
+  body,
+  accept,
+  working,
+  fileLabel,
+  folder,
+  canSubmit,
+  onChange,
+  onImport,
+}: {
+  title: string;
+  body: string;
+  accept?: string;
+  working: boolean;
+  fileLabel: string;
+  folder?: boolean;
+  canSubmit: boolean;
+  onChange: (files: File[]) => void;
+  onImport: () => void;
+}) {
+  return (
+    <section className="plugins-view__install-card">
+      <div>
+        <h3>{title}</h3>
+        <p>{body}</p>
+      </div>
+      <label className="plugins-import-modal__file">
+        <input
+          type="file"
+          data-testid={folder ? 'plugins-folder-input' : 'plugins-zip-input'}
+          {...(accept ? { accept } : {})}
+          {...(folder ? { webkitdirectory: '', directory: '' } : {})}
+          multiple={folder}
+          disabled={working}
+          onChange={(event) => onChange(Array.from(event.currentTarget.files ?? []))}
+        />
+        <span>{fileLabel}</span>
+      </label>
+      <button
+        type="button"
+        className="plugins-view__primary"
+        onClick={onImport}
+        disabled={working || !canSubmit}
+      >
+        {working ? 'Importing…' : 'Import'}
+      </button>
+    </section>
   );
 }
 

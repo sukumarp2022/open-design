@@ -42,7 +42,7 @@
     },
     "useCase": {
       "query": {
-        "en": "Use this plugin for the following Chinese-language task: 用 html-ppt-hermes-cyber-terminal 模板做一份 CLI / agent 测评 PPT。深色终端风 + scanlines + 命令行标题 + benchmark 柱状图。先确认：被测评对象、3-5 个对比维度、benchmark 数据。",
+        "en": "Use the html-ppt-hermes-cyber-terminal template to create a CLI / agent evaluation deck. Use a dark terminal style with scanlines, command-line titles, and benchmark bar charts. First confirm the evaluated objects, 3-5 comparison dimensions, and benchmark data.",
         "zh-CN": "用 html-ppt-hermes-cyber-terminal 模板做一份 CLI / agent 测评 PPT。深色终端风 + scanlines + 命令行标题 + benchmark 柱状图。先确认：被测评对象、3-5 个对比维度、benchmark 数据。"
       },
       "exampleOutputs": [

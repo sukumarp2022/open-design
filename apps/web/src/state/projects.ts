@@ -428,6 +428,22 @@ export async function installPluginSource(source: string): Promise<PluginInstall
   }
 }
 
+export async function uploadPluginZip(file: File): Promise<PluginInstallOutcome> {
+  const form = new FormData();
+  form.append('file', file);
+  return postPluginUpload('/api/plugins/upload-zip', form);
+}
+
+export async function uploadPluginFolder(files: File[]): Promise<PluginInstallOutcome> {
+  const form = new FormData();
+  for (const file of files) {
+    const relativePath = getUploadRelativePath(file);
+    form.append('files', file, file.name);
+    form.append('paths', relativePath);
+  }
+  return postPluginUpload('/api/plugins/upload-folder', form);
+}
+
 export async function upgradePlugin(id: string): Promise<PluginInstallOutcome> {
   const log: string[] = [];
   try {
@@ -470,6 +486,49 @@ export async function upgradePlugin(id: string): Promise<PluginInstallOutcome> {
       log,
     };
   }
+}
+
+async function postPluginUpload(url: string, form: FormData): Promise<PluginInstallOutcome> {
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      body: form,
+    });
+    const json = (await resp.json()) as Partial<PluginInstallOutcome> & {
+      error?: string | { message?: string };
+    };
+    if (resp.ok && json.ok) {
+      return {
+        ok: true,
+        plugin: json.plugin,
+        warnings: json.warnings ?? [],
+        message: json.message ?? 'Plugin installed.',
+        log: json.log ?? [],
+      };
+    }
+    const message =
+      json.message ??
+      (typeof json.error === 'string' ? json.error : json.error?.message) ??
+      resp.statusText;
+    return {
+      ok: false,
+      warnings: json.warnings ?? [],
+      message,
+      log: json.log ?? [],
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      warnings: [],
+      message: (err as Error).message,
+      log: [],
+    };
+  }
+}
+
+function getUploadRelativePath(file: File): string {
+  const withRelativePath = file as File & { webkitRelativePath?: string };
+  return withRelativePath.webkitRelativePath || file.name;
 }
 
 export async function uninstallPlugin(id: string): Promise<boolean> {
@@ -622,4 +681,33 @@ export function renderPluginBriefTemplate(
     }
     return full;
   });
+}
+
+export function resolvePluginQueryFallback(
+  value: unknown,
+  locale?: string,
+  fallbackLocale: string = 'en',
+): string {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (!isStringMap(value)) return '';
+
+  const candidates = [
+    locale,
+    locale?.split('-')[0],
+    fallbackLocale,
+    fallbackLocale.split('-')[0],
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    const resolved = value[candidate];
+    if (typeof resolved === 'string' && resolved.length > 0) return resolved;
+  }
+
+  return Object.values(value).find((entry) => entry.length > 0) ?? '';
+}
+
+function isStringMap(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return Object.values(value).every((entry) => typeof entry === 'string');
 }

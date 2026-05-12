@@ -42,7 +42,7 @@
     },
     "useCase": {
       "query": {
-        "en": "Use this plugin for the following Chinese-language task: 用 html-ppt-graphify-dark-graph 模板做一份 dev-tool 发布会 PPT。深夜渐变背景 + 力导向图谱封面 + 彩虹标题 + JetBrains Mono 命令行。先确认：工具名、核心能力、demo 步骤；要不要现场敲 CLI。",
+        "en": "Use the html-ppt-graphify-dark-graph template to create a dev-tool launch deck. Use a late-night gradient background, force-directed graph cover, rainbow headline, and JetBrains Mono command-line styling. First confirm the tool name, core capabilities, demo steps, and whether the CLI should be typed live.",
         "zh-CN": "用 html-ppt-graphify-dark-graph 模板做一份 dev-tool 发布会 PPT。深夜渐变背景 + 力导向图谱封面 + 彩虹标题 + JetBrains Mono 命令行。先确认：工具名、核心能力、demo 步骤；要不要现场敲 CLI。"
       },
       "exampleOutputs": [

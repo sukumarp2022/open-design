@@ -109,6 +109,18 @@
   color: var(--text);
 }
 
+.plugins-view__tab.is-disabled,
+.plugins-view__tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.plugins-view__tab.is-disabled:hover,
+.plugins-view__tab:disabled:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
 .plugins-view__tab.is-active {
   background: var(--bg-panel);
   border-color: var(--border);
@@ -441,6 +453,174 @@
   padding-left: 18px;
 }
 
+.plugins-import-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 18, 24, 0.28);
+  backdrop-filter: blur(4px);
+}
+
+.plugins-import-modal {
+  width: min(760px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-lg, 0 20px 60px rgba(0, 0, 0, 0.22));
+}
+
+.plugins-import-modal__head,
+.plugins-import-modal__foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.plugins-import-modal__head h2,
+.plugins-import-modal__coming h3,
+.plugins-view__install-card h3 {
+  margin: 0;
+  color: var(--text-strong);
+}
+
+.plugins-import-modal__close {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.plugins-import-modal__close:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.plugins-import-modal__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.plugins-import-modal__choice {
+  appearance: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.plugins-import-modal__choice:hover,
+.plugins-import-modal__choice.is-active {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.plugins-import-modal__choice-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding-top: 1px;
+}
+
+.plugins-import-modal__choice-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.plugins-import-modal__choice-copy span:first-child {
+  color: var(--text-strong);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.plugins-import-modal__choice-copy span:last-child {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.plugins-import-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugins-import-modal__file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.plugins-import-modal__file:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.plugins-import-modal__file input {
+  display: none;
+}
+
+.plugins-import-modal__coming {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.plugins-import-modal__coming p,
+.plugins-view__install-card p,
+.plugins-import-modal__foot p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.plugins-import-modal__foot {
+  align-items: center;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-soft);
+}
+
 @media (max-width: 900px) {
   .plugins-view__hero,
   .plugins-view__hero-actions,
@@ -461,6 +641,15 @@
   }
 
   .plugins-view__source-row {
+    flex-direction: column;
+  }
+
+  .plugins-import-modal__tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .plugins-import-modal__foot {
+    align-items: stretch;
     flex-direction: column;
   }
 }

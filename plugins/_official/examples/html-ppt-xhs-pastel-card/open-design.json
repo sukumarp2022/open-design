@@ -41,7 +41,7 @@
     },
     "useCase": {
       "query": {
-        "en": "Use this plugin for the following Chinese-language task: 用 html-ppt-xhs-pastel-card 模板做一份慢生活主题图文。奶油底 + 马卡龙圆角卡片 + Playfair 斜体序号 + donut 图。先告诉我主题（休息 / 暂停 / 自我照顾…）和 5-7 个想说的点。",
+        "en": "Use the html-ppt-xhs-pastel-card template to create a slow-living themed carousel. Use a cream background, macaron rounded cards, Playfair italic numbering, and a donut chart. First ask me for the theme (rest, pause, self-care, etc.) and 5-7 points I want to say.",
         "zh-CN": "用 html-ppt-xhs-pastel-card 模板做一份慢生活主题图文。奶油底 + 马卡龙圆角卡片 + Playfair 斜体序号 + donut 图。先告诉我主题（休息 / 暂停 / 自我照顾…）和 5-7 个想说的点。"
       },
       "exampleOutputs": [

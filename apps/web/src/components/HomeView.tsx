@@ -8,15 +8,15 @@
 // textarea can live centered in the hero.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  resolveLocalizedText,
-  type ApplyResult,
-  type InstalledPluginRecord,
+import type {
+  ApplyResult,
+  InstalledPluginRecord,
 } from '@open-design/contracts';
 import {
   applyPlugin,
   listPlugins,
   renderPluginBriefTemplate,
+  resolvePluginQueryFallback,
 } from '../state/projects';
 import { useI18n } from '../i18n';
 import type { Project } from '../types';
@@ -88,7 +88,7 @@ export function HomeView({
       if (field.default !== undefined) inputs[field.name] = field.default;
     }
     setActive({ record, result, inputs });
-    const query = result.query || resolveLocalizedText(record.manifest?.od?.useCase?.query, locale);
+    const query = result.query || resolvePluginQueryFallback(record.manifest?.od?.useCase?.query, locale);
     if (nextPrompt !== undefined && nextPrompt !== null) {
       setPrompt(nextPrompt);
     } else if (query) {

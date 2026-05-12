@@ -71,7 +71,7 @@ describe('HomeView plugin i18n', () => {
   });
 
   it('hydrates the Home prompt with the localized apply query', async () => {
-    const fetchMock = vi.fn(async (url) => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (typeof url === 'string' && url === '/api/plugins') {
         return new Response(JSON.stringify({ plugins: [PLUGIN_ROW] }), {
           status: 200,

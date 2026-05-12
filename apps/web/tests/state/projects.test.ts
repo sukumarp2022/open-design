@@ -7,7 +7,7 @@ describe('applyPlugin', () => {
   });
 
   it('passes the current locale to the daemon apply endpoint', async () => {
-    const fetchMock = vi.fn(async () => new Response(
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(
       JSON.stringify({
         query: '生成一份简报。',
         contextItems: [],

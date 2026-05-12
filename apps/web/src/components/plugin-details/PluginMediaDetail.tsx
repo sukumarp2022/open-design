@@ -15,6 +15,7 @@ import type {
   PluginManifest,
 } from '@open-design/contracts';
 import { useT } from '../../i18n';
+import { resolvePluginQueryFallback } from '../../state/projects';
 import { Icon } from '../Icon';
 import { PreviewModal, type PreviewView } from '../PreviewModal';
 import { PluginMetaSections } from './PluginMetaSections';
@@ -82,7 +83,7 @@ export function PluginMediaDetail({
   const manifest: PluginManifest = record.manifest ?? ({} as PluginManifest);
   const od = manifest.od ?? {};
   const description = manifest.description ?? '';
-  const query = od.useCase?.query ?? '';
+  const query = resolvePluginQueryFallback(od.useCase?.query);
   const media = useMemo(() => readMedia(record), [record]);
   const hasAsset = Boolean(media.poster || media.videoUrl || media.audioUrl);
 

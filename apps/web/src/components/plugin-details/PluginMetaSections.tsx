@@ -33,6 +33,7 @@ import type {
 } from '@open-design/contracts';
 import { Icon } from '../Icon';
 import { authorInitials, derivePluginSourceLinks } from '../../runtime/plugin-source';
+import { resolvePluginQueryFallback } from '../../state/projects';
 
 export interface PluginMetaOmit {
   description?: boolean;
@@ -73,7 +74,7 @@ export function PluginMetaSections({ record, omit, compact, heading }: Props) {
   const manifest: PluginManifest = record.manifest ?? ({} as PluginManifest);
   const od = manifest.od ?? {};
   const description = manifest.description ?? '';
-  const query = od.useCase?.query ?? '';
+  const query = resolvePluginQueryFallback(od.useCase?.query);
   const inputs = (od.inputs ?? []) as InputField[];
   const ctx = od.context ?? {};
   const stages = od.pipeline?.stages ?? [];
