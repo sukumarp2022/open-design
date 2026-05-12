@@ -246,7 +246,7 @@ describe('PluginDetailsModal common metadata coverage', () => {
     expect(html).toContain('mcp:invoke');
   });
 
-  it('surfaces meta sections in the design-system sidebar under DESIGN.md', () => {
+  it('surfaces Plugin info first in the design-system sidebar, with DESIGN.md below', () => {
     const html = render(
       pluginWithMeta({
         id: 'ds-with-meta',
@@ -260,6 +260,9 @@ describe('PluginDetailsModal common metadata coverage', () => {
     expect(html).toContain('plugin-meta-sections');
     expect(html).toContain('plugin-meta-sections__heading');
     expect(html).toMatch(/<h3[^>]*>Plugin info<\/h3>/);
+    expect(html).toContain('plugin-design-sidebar__spec');
+    expect(html).toContain('DESIGN.md');
+    expect(html.indexOf('Plugin info')).toBeLessThan(html.indexOf('DESIGN.md'));
     expect(html).toContain('Workflow');
     expect(html).toContain('Source');
   });

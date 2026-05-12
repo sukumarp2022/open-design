@@ -7,8 +7,8 @@
 //   - `html`   → sandboxed iframe rendering the plugin's example
 //                output / preview entry (examples + scenarios that
 //                ship a `od.preview.entry` or `exampleOutputs[]`)
-//   - `design` → stylized "X feels like X" tile (design-system
-//                plugins, which do not ship a runnable preview)
+//   - `design` → design-system showcase thumbnail, falling back to
+//                a stylized brand patch when no showcase ref exists
 //   - `text`   → fallback layout (other scenario plugins, atoms
 //                that slip through the visiblePlugins filter, …)
 //
@@ -55,6 +55,7 @@ export interface HtmlPreviewSpec {
 export interface DesignPreviewSpec {
   kind: 'design';
   brand: string;
+  designSystemId: string | null;
   swatches: string[];
 }
 
@@ -80,6 +81,10 @@ interface PreviewBlock {
 interface ExampleOutputEntry {
   path?: unknown;
   title?: unknown;
+}
+
+interface ContextRef {
+  ref?: unknown;
 }
 
 function readPreview(record: InstalledPluginRecord): PreviewBlock | null {
@@ -112,6 +117,14 @@ function isDesignSystemPlugin(record: InstalledPluginRecord): boolean {
   }
   const tags = record.manifest?.tags ?? [];
   return tags.some((t) => t.toLowerCase() === 'design-system');
+}
+
+function designSystemRef(record: InstalledPluginRecord): string | null {
+  const od = record.manifest?.od as
+    | { context?: { designSystem?: ContextRef } }
+    | undefined;
+  const ref = od?.context?.designSystem?.ref;
+  return typeof ref === 'string' && ref.length > 0 ? ref : null;
 }
 
 // Synthetic colour swatches derived from the plugin id so cards stay
@@ -219,6 +232,7 @@ export function inferPluginPreview(
     return {
       kind: 'design',
       brand: brandLabel(record),
+      designSystemId: designSystemRef(record),
       swatches: deriveSwatches(record),
     };
   }

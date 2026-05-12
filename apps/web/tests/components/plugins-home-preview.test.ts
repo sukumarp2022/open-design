@@ -16,6 +16,7 @@ interface MakeArgs {
   title?: string;
   tags?: string[];
   mode?: string;
+  designSystemRef?: string;
   preview?: Record<string, unknown>;
   exampleOutputs?: Array<{ path: string; title?: string }>;
 }
@@ -37,6 +38,9 @@ function make(args: MakeArgs): InstalledPluginRecord {
       od: {
         kind: 'scenario',
         ...(args.mode ? { mode: args.mode } : {}),
+        ...(args.designSystemRef
+          ? { context: { designSystem: { ref: args.designSystemRef } } }
+          : {}),
         ...(args.preview ? { preview: args.preview } : {}),
         ...(args.exampleOutputs
           ? { useCase: { exampleOutputs: args.exampleOutputs } }
@@ -123,12 +127,27 @@ describe('inferPluginPreview', () => {
     expect(out.label).toBe('Weekly');
   });
 
-  it('renders design-system plugins (mode signal) as design patches with stable swatches', () => {
-    const a = inferPluginPreview(make({ id: 'ds-a', mode: 'design-system', title: 'Airbnb' }));
-    const b = inferPluginPreview(make({ id: 'ds-a', mode: 'design-system', title: 'Airbnb' }));
+  it('renders design-system plugins (mode signal) as showcase-backed design surfaces', () => {
+    const a = inferPluginPreview(
+      make({
+        id: 'ds-a',
+        mode: 'design-system',
+        title: 'Airbnb',
+        designSystemRef: 'airbnb',
+      }),
+    );
+    const b = inferPluginPreview(
+      make({
+        id: 'ds-a',
+        mode: 'design-system',
+        title: 'Airbnb',
+        designSystemRef: 'airbnb',
+      }),
+    );
     expect(a.kind).toBe('design');
     if (a.kind !== 'design' || b.kind !== 'design') return;
     expect(a.brand).toBe('Airbnb');
+    expect(a.designSystemId).toBe('airbnb');
     expect(a.swatches).toHaveLength(3);
     expect(a.swatches).toEqual(b.swatches);
   });
@@ -136,6 +155,8 @@ describe('inferPluginPreview', () => {
   it('treats the design-system tag as a fallback signal when mode is missing', () => {
     const out = inferPluginPreview(make({ id: 'ds-tag', tags: ['design-system'] }));
     expect(out.kind).toBe('design');
+    if (out.kind !== 'design') return;
+    expect(out.designSystemId).toBeNull();
   });
 
   it('returns text fallback for plain scenario plugins without preview material', () => {

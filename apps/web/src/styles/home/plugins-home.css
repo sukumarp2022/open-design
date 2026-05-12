@@ -556,7 +556,7 @@
   -webkit-backdrop-filter: blur(6px);
 }
 
-/* Design-system synthesised tile */
+/* Design-system showcase tile */
 .plugins-home__design {
   position: relative;
   width: 100%;
@@ -568,11 +568,40 @@
   font-family: var(--serif);
   overflow: hidden;
 }
+.plugins-home__design--showcase {
+  display: block;
+  padding: 0;
+  background: var(--bg-panel);
+  font-family: inherit;
+}
 .plugins-home__design::before {
   content: '';
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, transparent 60%, rgba(0, 0, 0, 0.18));
+  pointer-events: none;
+}
+.plugins-home__design--showcase::before {
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 52%, rgba(0, 0, 0, 0.18) 100%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
+}
+.plugins-home__design-showcase {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg-panel);
+}
+.plugins-home__design-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 960px;
+  border: 0;
+  transform: scale(0.24);
+  transform-origin: 0 0;
   pointer-events: none;
 }
 .plugins-home__design-headline {

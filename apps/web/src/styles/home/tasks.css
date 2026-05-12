@@ -24,12 +24,53 @@
   color: var(--accent-strong, var(--accent));
 }
 
+.tasks-view__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tasks-view__coming-soon {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--amber, #b26200);
+  border-radius: 999px;
+  background: var(--amber-bg, #fff3e0);
+  color: var(--amber, #b26200);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .tasks-view__lede {
   margin: 8px 0 0;
   max-width: 680px;
   font-size: 13px;
   line-height: 1.55;
   color: var(--text-muted);
+}
+
+.tasks-view__preview-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber, #b26200) 22%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--amber-bg, #fff3e0) 70%, var(--bg-panel));
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tasks-view__preview-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--amber, #b26200);
 }
 
 .tasks-view__new,

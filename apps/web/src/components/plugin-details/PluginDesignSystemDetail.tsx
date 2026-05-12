@@ -5,8 +5,9 @@
 //     referenced design system (`/api/design-systems/:slug/showcase`)
 //   - Tokens tab   — the palette / typography / components inspector
 //     (`/api/design-systems/:slug/preview`)
-//   - DESIGN.md sidebar — the raw spec served from the plugin's own
-//     bundled asset (`/api/plugins/:id/asset/DESIGN.md`)
+//   - Plugin info sidebar — manifest metadata first, with the raw
+//     DESIGN.md spec included as a section underneath
+//     (`/api/plugins/:id/asset/DESIGN.md`)
 //
 // Falls back gracefully when the plugin does not reference an
 // upstream design system (some bundles ship DESIGN.md only): the
@@ -106,8 +107,9 @@ export function PluginDesignSystemDetail({
 
   // When no upstream design system is referenced we still need a view
   // for the iframe stage so PreviewModal has something to render. Fall
-  // back to a minimal placeholder that explains the spec lives in the
-  // sidebar; the user can still apply the plugin from the primary CTA.
+  // back to a minimal placeholder that explains the design spec lives
+  // in the plugin-info sidebar; the user can still apply the plugin
+  // from the primary CTA.
   const views: PreviewView[] = dsRef
     ? [
         { id: 'showcase', label: t('ds.showcase'), html: showcaseHtml },
@@ -117,7 +119,7 @@ export function PluginDesignSystemDetail({
         {
           id: 'spec',
           label: 'Spec',
-          html: '<!doctype html><meta charset="utf-8"><body style="font:14px system-ui;color:#666;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:0 24px;margin:0;">This plugin ships only the DESIGN.md spec — open the sidebar to read it.</body>',
+          html: '<!doctype html><meta charset="utf-8"><body style="font:14px system-ui;color:#666;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;padding:0 24px;margin:0;">This plugin ships only the design spec — open Plugin info to read DESIGN.md.</body>',
         },
       ];
 
@@ -131,22 +133,16 @@ export function PluginDesignSystemDetail({
       exportTitleFor={(viewId) => `${record.title} — ${viewId}`}
       onClose={onClose}
       sidebar={{
-        label: t('ds.specToggle'),
+        label: 'Plugin info',
         defaultOpen: true,
         onToggle: handleSidebarToggle,
         contentKey: record.id,
-        // DESIGN.md sits at the top so the spec is the first thing users
-        // read; the plugin-common metadata (workflow / context bundles /
-        // connectors / file paths / source provenance) stacks below in
-        // the same scroll container so the design-system modal carries
-        // the full inspector depth the scenario fallback already does.
+        // Design-system plugins are still plugins, so the inspector
+        // comes first. DESIGN.md remains available in the same sidebar,
+        // but as a spec section below the plugin-common metadata.
         content: (
           <div className="plugin-design-sidebar">
-            <DesignSpecView
-              source={specBody}
-              loadingLabel={t('ds.specLoading')}
-            />
-            <div className="plugin-info-pane plugin-design-sidebar__meta">
+            <div className="plugin-info-pane">
               <PluginMetaSections
                 record={record}
                 omit={{ description: true }}
@@ -154,6 +150,16 @@ export function PluginDesignSystemDetail({
                 heading="Plugin info"
               />
             </div>
+            <section className="plugin-design-sidebar__spec">
+              <div className="plugin-design-sidebar__spec-head">
+                <h3>DESIGN.md</h3>
+                <span>{assetPath.replace(/^\.\//, '')}</span>
+              </div>
+              <DesignSpecView
+                source={specBody}
+                loadingLabel={t('ds.specLoading')}
+              />
+            </section>
           </div>
         ),
       }}

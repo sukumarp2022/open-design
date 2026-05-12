@@ -39,7 +39,7 @@ export function PreviewSurface({ pluginId, pluginTitle, preview }: Props) {
           inView={inView}
         />
       ) : preview.kind === 'design' ? (
-        <DesignSystemSurface preview={preview} />
+        <DesignSystemSurface preview={preview} inView={inView} />
       ) : (
         <TextSurface pluginTitle={pluginTitle} />
       )}

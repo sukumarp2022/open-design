@@ -187,9 +187,12 @@ export function TasksView({ config, onOpenOrbitSettings }: Props) {
       <header className="tasks-view__hero">
         <div>
           <p className="tasks-view__kicker">Automation workspace</p>
-          <h1 id="tasks-title" className="entry-section__title">
-            Tasks
-          </h1>
+          <div className="tasks-view__title-row">
+            <h1 id="tasks-title" className="entry-section__title">
+              Tasks
+            </h1>
+            <span className="tasks-view__coming-soon">Coming soon</span>
+          </div>
           <p className="tasks-view__lede">
             Tasks turn prompts into durable work: Orbit runs them, routines keep
             them around, schedules decide when they fire, and live artifacts show
@@ -205,6 +208,14 @@ export function TasksView({ config, onOpenOrbitSettings }: Props) {
           <span>New task</span>
         </button>
       </header>
+
+      <div className="tasks-view__preview-note" role="note">
+        <Icon name="orbit" size={14} />
+        <span>
+          Preview surface only. Orbit settings are available today; routines,
+          schedules, and live artifact wiring will land as the backend branches merge.
+        </span>
+      </div>
 
       <div className="tasks-primitives" aria-label="Task primitives">
         <PrimitiveCard

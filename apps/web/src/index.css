@@ -16225,30 +16225,51 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Design-system sidebar stacks DESIGN.md prose at the top of the pane
-   and the plugin-info block below; the divider mirrors the dashed
-   separators inside the meta sections so they feel like one column. */
+/* Design-system sidebar keeps the plugin inspector first, then exposes
+   DESIGN.md as a secondary spec section. This makes design systems read
+   like first-class plugins instead of a special DESIGN.md-only viewer. */
 .plugin-design-sidebar {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
 }
-.plugin-design-sidebar > .design-spec-pre,
-.plugin-design-sidebar > .design-spec-empty {
-  flex: 0 0 auto;
-}
-.plugin-design-sidebar__meta {
+.plugin-design-sidebar__spec {
   border-top: 1px dashed var(--border);
-  padding-top: 8px;
+  padding: 14px 18px 24px;
+  background: var(--bg-panel);
 }
-.plugin-design-sidebar__divider {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+.plugin-design-sidebar__spec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.plugin-design-sidebar__spec-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  color: var(--text);
+}
+.plugin-design-sidebar__spec-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
   color: var(--text-muted);
-  padding: 6px 0 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.plugin-design-sidebar__spec > .design-spec-pre,
+.plugin-design-sidebar__spec > .design-spec-empty {
+  margin: 0;
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
 /* Plugin info heading — the badge-style header shown by the
