@@ -14,6 +14,7 @@ import {
   extractCategories,
   extractSubcategories,
   isFeaturedPlugin,
+  resolveDefaultSelection,
 } from '../../src/components/plugins-home/facets';
 
 function fixture(overrides: {
@@ -298,5 +299,30 @@ describe('isFeaturedPlugin', () => {
     expect(isFeaturedPlugin(fixture({ id: 'a', od: { featured: true } }))).toBe(true);
     expect(isFeaturedPlugin(fixture({ id: 'b', od: { featured: 'true' } }))).toBe(false);
     expect(isFeaturedPlugin(fixture({ id: 'c' }))).toBe(false);
+  });
+});
+
+describe('resolveDefaultSelection', () => {
+  it('defaults the home catalog to Create > Slides when that bucket exists', () => {
+    const catalog = buildFacetCatalog([
+      fixture({ id: 'slides', od: { mode: 'deck' } }),
+      fixture({ id: 'prototype', od: { mode: 'prototype' } }),
+    ]);
+
+    expect(resolveDefaultSelection(catalog)).toEqual({
+      category: 'create',
+      subcategory: 'deck',
+    });
+  });
+
+  it('falls back to the Create lane when Slides is unavailable', () => {
+    const catalog = buildFacetCatalog([
+      fixture({ id: 'prototype', od: { mode: 'prototype' } }),
+    ]);
+
+    expect(resolveDefaultSelection(catalog)).toEqual({
+      category: 'create',
+      subcategory: null,
+    });
   });
 });

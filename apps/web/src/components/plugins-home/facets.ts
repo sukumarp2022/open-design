@@ -729,12 +729,12 @@ export function filterByQuery(
   });
 }
 
-// Smart default selection. Lead users into the broad creation lane so
-// the first grid feels useful without hiding the source/import/export
-// lanes one tap away.
+// Smart default selection. Lead users into the visually strongest
+// creation bucket first; Slides tends to contain polished, image-heavy
+// cards, while the broader Create lane remains one tap away.
 export const PREFERRED_DEFAULT_SELECTION: FacetSelection = {
   category: 'create',
-  subcategory: null,
+  subcategory: 'deck',
 };
 
 export function resolveDefaultSelection(catalog: FacetCatalog): FacetSelection {
@@ -742,6 +742,14 @@ export function resolveDefaultSelection(catalog: FacetCatalog): FacetSelection {
   const hasCategory = wantCategory
     ? catalog.category.some((o) => o.slug === wantCategory)
     : true;
-  if (hasCategory) return PREFERRED_DEFAULT_SELECTION;
-  return { category: null, subcategory: null };
+  if (!hasCategory || !wantCategory) return { category: null, subcategory: null };
+
+  const wantSubcategory = PREFERRED_DEFAULT_SELECTION.subcategory;
+  if (!wantSubcategory) return PREFERRED_DEFAULT_SELECTION;
+
+  const hasSubcategoryWithPlugins = catalog.subcategory[wantCategory]?.some(
+    (o) => o.slug === wantSubcategory && o.count > 0,
+  );
+  if (hasSubcategoryWithPlugins) return PREFERRED_DEFAULT_SELECTION;
+  return { category: wantCategory, subcategory: null };
 }

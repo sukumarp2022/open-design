@@ -2,7 +2,13 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { InstalledPluginRecord, PluginSourceKind, TrustTier } from '@open-design/contracts';
+import type {
+  InstalledPluginRecord,
+  McpServerConfig,
+  PluginSourceKind,
+  SkillSummary,
+  TrustTier,
+} from '@open-design/contracts';
 import { HomeHero } from '../../src/components/HomeHero';
 
 function makePlugin(
@@ -29,6 +35,33 @@ function makePlugin(
     fsPath: '/tmp',
     installedAt: 0,
     updatedAt: 0,
+  };
+}
+
+function makeSkill(id: string, name: string): SkillSummary {
+  return {
+    id,
+    name,
+    description: 'A skill fixture',
+    triggers: ['fixture'],
+    mode: 'prototype',
+    previewType: 'html',
+    designSystemRequired: false,
+    defaultFor: [],
+    upstream: null,
+    hasBody: true,
+    examplePrompt: `Use ${name}`,
+    aggregatesExamples: false,
+  };
+}
+
+function makeMcp(id: string, label: string): McpServerConfig {
+  return {
+    id,
+    label,
+    transport: 'stdio',
+    enabled: true,
+    command: 'npx',
   };
 }
 
@@ -70,6 +103,102 @@ describe('HomeHero plugin picker', () => {
     expect(onPickPlugin).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sample-user-plugin' }),
       'Make',
+    );
+  });
+
+  it('opens the context picker for a bare @ token even before results arrive', () => {
+    render(
+      <HomeHero
+        prompt="@"
+        onPromptChange={() => undefined}
+        onSubmit={() => undefined}
+        activePluginTitle={null}
+        activeChipId={null}
+        onClearActivePlugin={() => undefined}
+        pluginOptions={[]}
+        pluginsLoading={false}
+        skillOptions={[]}
+        skillsLoading={false}
+        mcpOptions={[]}
+        mcpLoading={false}
+        pendingPluginId={null}
+        pendingChipId={null}
+        onPickPlugin={() => undefined}
+        onPickChip={() => undefined}
+        contextItemCount={0}
+        error={null}
+      />,
+    );
+
+    expect(screen.getByTestId('home-hero-plugin-picker')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /plugins/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /skills/i })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /mcp/i })).toBeTruthy();
+    expect(screen.getByText('Search plugins, skills, and MCP servers.')).toBeTruthy();
+  });
+
+  it('can pick skills and MCP servers from the home @ picker', () => {
+    const onPickSkill = vi.fn();
+    const onPickMcp = vi.fn();
+    const skill = makeSkill('prototype-lab', 'Prototype Lab');
+    const mcp = makeMcp('linear', 'Linear');
+    const { rerender } = render(
+      <HomeHero
+        prompt="Make @proto"
+        onPromptChange={() => undefined}
+        onSubmit={() => undefined}
+        activePluginTitle={null}
+        activeChipId={null}
+        onClearActivePlugin={() => undefined}
+        pluginOptions={[]}
+        pluginsLoading={false}
+        skillOptions={[skill]}
+        skillsLoading={false}
+        mcpOptions={[mcp]}
+        mcpLoading={false}
+        pendingPluginId={null}
+        pendingChipId={null}
+        onPickPlugin={() => undefined}
+        onPickSkill={onPickSkill}
+        onPickMcp={onPickMcp}
+        onPickChip={() => undefined}
+        contextItemCount={0}
+        error={null}
+      />,
+    );
+
+    fireEvent.mouseDown(screen.getByRole('option', { name: /prototype lab/i }));
+    expect(onPickSkill).toHaveBeenCalledWith(skill, 'Make');
+
+    rerender(
+      <HomeHero
+        prompt="@lin"
+        onPromptChange={() => undefined}
+        onSubmit={() => undefined}
+        activePluginTitle={null}
+        activeChipId={null}
+        onClearActivePlugin={() => undefined}
+        pluginOptions={[]}
+        pluginsLoading={false}
+        skillOptions={[skill]}
+        skillsLoading={false}
+        mcpOptions={[mcp]}
+        mcpLoading={false}
+        pendingPluginId={null}
+        pendingChipId={null}
+        onPickPlugin={() => undefined}
+        onPickSkill={onPickSkill}
+        onPickMcp={onPickMcp}
+        onPickChip={() => undefined}
+        contextItemCount={0}
+        error={null}
+      />,
+    );
+
+    fireEvent.mouseDown(screen.getByRole('option', { name: /linear/i }));
+    expect(onPickMcp).toHaveBeenCalledWith(
+      mcp,
+      'Use the `linear` MCP server tools.',
     );
   });
 

@@ -96,11 +96,22 @@ export const DECK_SKELETON_HTML = `<!doctype html>
     .slide {
       position: absolute;
       inset: 0;
-      display: none;
-      flex-direction: column;
       overflow: hidden;
     }
-    .slide.active { display: flex; }
+    /* Visibility toggle hardened with :not(.active) + !important so cascade
+       order can't break it. The previous \`.slide { display:none }\` rule
+       lost the cascade whenever a per-slide variant class (e.g.
+       \`.s-cold { display:grid }\`) was declared after it on the same
+       element — every slide silently became visible at once. The
+       \`!important\` is a belt-and-suspenders against agent code that adds
+       \`!important\` on variant classes too. */
+    .slide:not(.active) { display: none !important; }
+    /* The active default uses :where() so it has zero specificity. Per-slide
+       variant classes like \`.s-cold { display:grid }\` or
+       \`.s-magazine { display:block }\` can override the default flex layout
+       just by declaring \`display\` — no need for the variant to be more
+       specific. The hide rule above still wins for inactive slides. */
+    :where(.slide.active) { display: flex; flex-direction: column; }
 
     /* Chrome — counter + prev/next live outside the scaled stage so they
        don't shrink with it. Do not relocate them inside .deck-stage. */
@@ -349,7 +360,7 @@ These are the failure patterns we just spent days debugging. Each one looks "equ
 - ❌ Don't use \`document.addEventListener('keydown', …)\` alone. Inside an iframe, focus is sometimes on window. The framework adds capture-phase listeners on **both** targets — replacing this with a single listener silently swallows arrow keys.
 - ❌ Don't replace the localStorage key, the slide-visibility toggle (\`.slide.active\`), or the counter element IDs (\`#deck-cur\`, \`#deck-total\`, \`#deck-prev\`, \`#deck-next\`). The framework reads them by ID.
 - ❌ Don't put the prev/next buttons or the counter **inside** \`.deck-stage\`. They must live outside the scaled element so they stay legible at any viewport size.
-- ❌ Don't redefine \`.slide { display: ... }\` in your per-deck styles. The framework uses \`display: none\` / \`display: flex\` to toggle slides; overriding it breaks navigation.
+- ❌ Don't redefine \`.slide\`, \`.slide.active\`, or \`.slide:not(.active)\` directly. The framework owns the visibility toggle through those exact selectors. If you want a non-flex layout on a slide, **add a variant class to the same \`<section class="slide …">\` element** (e.g. \`.s-cold\`, \`.s-magazine\`) and declare \`display: grid\` / \`display: block\` on the variant. The framework's active default is wrapped in \`:where(...)\` so it has zero specificity — your variant always wins for the active slide. Variant classes do NOT need to be more specific than \`.slide.active\`. (The inactive-hide rule still wins because it uses \`:not(.active) { display: none !important; }\`.)
 - ❌ Don't strip or "tidy" the \`@media print\` block. It is how Share → PDF stitches every slide into a multi-page document. Without it, PDF export collapses to a single screenshot.
 
 ## Why this matters (so you can judge edge cases)

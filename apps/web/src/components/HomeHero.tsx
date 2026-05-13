@@ -11,7 +11,7 @@ import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { InstalledPluginRecord, McpServerConfig } from '@open-design/contracts';
 import type { SkillSummary } from '../types';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 import {
   chipsForGroup,
   type ChipGroup,
@@ -47,6 +47,24 @@ interface Props {
   onPickChip: (chip: HomeHeroChip) => void;
   contextItemCount: number;
   error: string | null;
+}
+
+type HomeMentionTab = 'all' | 'plugins' | 'skills' | 'mcp';
+
+interface HomeMentionOption {
+  id: string;
+  icon: IconName;
+  title: string;
+  description: string;
+  meta: string;
+  disabled?: boolean;
+  onPick: () => void;
+}
+
+interface HomeMentionSection {
+  id: Exclude<HomeMentionTab, 'all'>;
+  label: string;
+  options: HomeMentionOption[];
 }
 
 export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero(
@@ -319,7 +337,6 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
             className="home-hero__plugin-picker"
             role="listbox"
             aria-label="Context search results"
-            data-testid="home-hero-context-picker"
             data-testid="home-hero-plugin-picker"
           >
             <div className="home-hero__mention-tabs" role="tablist" aria-label="Context surfaces">
@@ -444,13 +461,13 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
   );
 });
 
-interface PluginMention {
+interface ContextMention {
   start: number;
   end: number;
   query: string;
 }
 
-function getPluginMention(value: string): PluginMention | null {
+function getContextMention(value: string): ContextMention | null {
   const start = value.lastIndexOf('@');
   if (start < 0) return null;
   const before = value[start - 1];
@@ -465,16 +482,72 @@ function getPluginMention(value: string): PluginMention | null {
   };
 }
 
-function replaceMentionToken(value: string, mention: PluginMention): string | null {
+function replaceMentionToken(value: string, mention: ContextMention): string | null {
   const before = value.slice(0, mention.start).trimEnd();
   const after = value.slice(mention.end).trimStart();
   const next = [before, after].filter(Boolean).join(' ').trim();
   return next.length > 0 ? next : null;
 }
 
+function replaceMentionTokenWithText(
+  value: string,
+  mention: ContextMention,
+  replacement: string,
+): string {
+  const before = value.slice(0, mention.start).trimEnd();
+  const after = value.slice(mention.end).trimStart();
+  return [before, replacement.trim(), after].filter(Boolean).join(' ').trim();
+}
+
 function isImeComposing(event: ReactKeyboardEvent<HTMLTextAreaElement>, composing: boolean): boolean {
   const nativeEvent = event.nativeEvent as KeyboardEvent & { keyCode?: number };
   return composing || nativeEvent.isComposing || nativeEvent.keyCode === 229;
+}
+
+function pluginMatchesQuery(plugin: InstalledPluginRecord, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    plugin.title,
+    plugin.id,
+    plugin.sourceKind,
+    plugin.manifest?.description ?? '',
+    ...(plugin.manifest?.tags ?? []),
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(q);
+}
+
+function skillMatchesQuery(skill: SkillSummary, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    skill.id,
+    skill.name,
+    skill.description,
+    skill.mode,
+    skill.surface ?? '',
+    ...skill.triggers,
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(q);
+}
+
+function mcpServerMatchesQuery(server: McpServerConfig, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    server.id,
+    server.label ?? '',
+    server.transport,
+    server.url ?? '',
+    server.command ?? '',
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(q);
 }
 
 function getPluginSourceLabel(plugin: InstalledPluginRecord): string {

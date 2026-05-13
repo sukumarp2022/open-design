@@ -260,9 +260,10 @@ describe('PluginsHomeSection (category bar)', () => {
         onOpenDetails={() => {}}
       />,
     );
-    fireEvent.click(screen.getByTestId('plugins-home-pill-subcategory-create-deck'));
     let items = within(screen.getByRole('list')).getAllByRole('listitem');
     expect(items.map((i) => i.getAttribute('data-plugin-id'))).toEqual(['f']);
+    expect(screen.getByTestId('plugins-home-pill-subcategory-create-deck').getAttribute('aria-selected'))
+      .toBe('true');
 
     fireEvent.click(screen.getByTestId('plugins-home-pill-subcategory-create-all'));
     fireEvent.click(screen.getByTestId('plugins-home-pill-subcategory-create-hyperframes'));
