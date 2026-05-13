@@ -583,69 +583,6 @@ code {
   min-width: 0;
   flex: 0 1 auto;
 }
-.project-target-platforms,
-.project-feature-chips {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: min(100%, 280px);
-  height: 22px;
-  overflow: hidden;
-  white-space: nowrap;
-  flex: 0 1 auto;
-}
-.project-feature-chips {
-  max-width: min(100%, 260px);
-}
-.project-target-platforms-label,
-.project-feature-chips-label {
-  color: var(--text-muted);
-  font-size: 10px;
-  line-height: 18px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  flex-shrink: 0;
-}
-.project-target-platform-chip,
-.project-feature-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  max-width: 92px;
-  height: 20px;
-  padding: 0 8px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--bg-subtle) 88%, transparent);
-  font-size: 11px;
-  line-height: 18px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 0 1 auto;
-}
-.project-feature-chip.is-landing {
-  color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));
-  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-subtle));
-}
-.project-feature-chip.is-widgets {
-  color: color-mix(in srgb, #0891b2 72%, var(--text-strong));
-  border-color: color-mix(in srgb, #0891b2 26%, transparent);
-  background: color-mix(in srgb, #0891b2 10%, var(--bg-subtle));
-}
-.project-target-platform-chip.is-count {
-  min-width: 28px;
-  max-width: 36px;
-  flex: 0 0 auto;
-  color: var(--text-strong);
-  background: color-mix(in srgb, var(--accent, #7c5cff) 12%, var(--bg-subtle));
-}
-
 .topbar {
   display: flex;
   align-items: center;
@@ -3908,7 +3845,7 @@ code {
    ============================================================ */
 .entry-shell {
   display: grid;
-  grid-template-rows: 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100vh;
   min-height: 0;
   background: var(--bg);
@@ -3927,67 +3864,6 @@ code {
   background: transparent;
   display: flex;
   flex-direction: column;
-}
-
-.entry-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 20px 18px;
-}
-.entry-brand-actions {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-}
-.entry-brand-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-tint) 0%, var(--accent-soft) 100%);
-  color: var(--accent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-.entry-brand-mark .brand-mark-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  padding: 2px;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-.entry-brand-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.entry-brand-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.entry-brand-title {
-  font-family: var(--serif);
-  font-weight: 450;
-  font-size: 22px;
-  letter-spacing: -0.015em;
-  line-height: 1;
-  color: var(--text);
-}
-.entry-brand-pill {
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-}
-.entry-brand-subtitle {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  letter-spacing: 0.01em;
 }
 
 /* ============================================================
@@ -4020,6 +3896,7 @@ code {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  padding-top: 24px;
 }
 .newproj-tabs-shell {
   position: relative;
@@ -12512,13 +12389,6 @@ button.ghost.mcp-copy-btn:hover:not(:disabled) {
 .entry-side-resizer:hover,
 .entry-side-resizer.dragging { background: var(--accent-soft); }
 body.entry-resizing { cursor: col-resize; user-select: none; }
-
-/* Branded header — title + research-preview pill on a single line, with
-   the "by …" subtitle underneath. */
-.entry-brand-title-row {
-  flex-wrap: wrap;
-  row-gap: 4px;
-}
 
 /* ============================================================
    Composer Import popover (coming-soon menu)
