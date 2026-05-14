@@ -1138,6 +1138,8 @@ code {
   inset-block-start: 6px;
   inset-inline-end: 6px;
   padding: 4px;
+  border: none;
+  background: none;
   border-radius: 4px;
   opacity: 0;
   transition: opacity 120ms ease;
@@ -1147,6 +1149,7 @@ code {
 }
 .msg.user .user-copy-btn:hover {
   color: #fff;
+  background: rgba(255, 255, 255, 0.12);
 }
 .msg.user .user-text-wrap:hover .user-copy-btn,
 .msg.user .user-text-wrap:focus-within .user-copy-btn,
