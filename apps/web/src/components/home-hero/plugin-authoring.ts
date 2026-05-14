@@ -1,9 +1,17 @@
-export interface HomePromptHandoff {
-  id: number;
-  prompt: string;
-  focus: boolean;
-  source: 'plugin-authoring';
-}
+export type HomePromptHandoff =
+  | {
+    id: number;
+    prompt: string;
+    focus: boolean;
+    source: 'plugin-authoring';
+  }
+  | {
+    id: number;
+    pluginId: string;
+    focus: boolean;
+    source: 'plugin-use';
+    inputs?: Record<string, unknown>;
+  };
 
 export const PLUGIN_AUTHORING_PROMPT = [
   'Create an Open Design plugin for: <describe the workflow you want to package>.',
@@ -42,5 +50,19 @@ export function createPluginAuthoringHandoff(
     prompt,
     focus: true,
     source: 'plugin-authoring',
+  };
+}
+
+export function createPluginUseHandoff(
+  id: number,
+  pluginId: string,
+  inputs?: Record<string, unknown>,
+): HomePromptHandoff {
+  return {
+    id,
+    pluginId,
+    ...(inputs ? { inputs } : {}),
+    focus: true,
+    source: 'plugin-use',
   };
 }

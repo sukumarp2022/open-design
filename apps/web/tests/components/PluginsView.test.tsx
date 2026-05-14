@@ -203,6 +203,19 @@ describe('PluginsView', () => {
     expect(screen.getByText('Example Catalog')).toBeTruthy();
   });
 
+  it('hands installed plugin Use actions to the host shell', async () => {
+    const onUsePlugin = vi.fn();
+    render(<PluginsView onUsePlugin={onUsePlugin} />);
+
+    fireEvent.click(await screen.findByTestId('plugins-home-use-user-plugin'));
+
+    expect(onUsePlugin).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'user-plugin',
+      title: 'User Plugin',
+    }));
+    expect(mockedApplyPlugin).not.toHaveBeenCalled();
+  });
+
   it('installs from a supported source string', async () => {
     render(<PluginsView />);
 

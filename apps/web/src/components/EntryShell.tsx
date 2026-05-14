@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   defaultScenarioPluginIdForKind,
   type ConnectorDetail,
+  type InstalledPluginRecord,
 } from '@open-design/contracts';
 import { LOCALE_LABEL, LOCALES, useI18n, useT, type Locale } from '../i18n';
 import { navigate, useRoute } from '../router';
@@ -40,6 +41,7 @@ import { HomeView } from './HomeView';
 import {
   buildPluginAuthoringPrompt,
   createPluginAuthoringHandoff,
+  createPluginUseHandoff,
   type HomePromptHandoff,
 } from './home-hero/plugin-authoring';
 import { Icon } from './Icon';
@@ -276,6 +278,11 @@ export function EntryShell({
         goal ? buildPluginAuthoringPrompt(goal) : undefined,
       ),
     );
+    changeView('home');
+  }
+
+  function usePluginFromLibrary(record: InstalledPluginRecord) {
+    setHomePromptHandoff(createPluginUseHandoff(Date.now(), record.id));
     changeView('home');
   }
 
@@ -721,6 +728,7 @@ export function EntryShell({
             {view === 'plugins' ? (
               <PluginsView
                 onCreatePlugin={startPluginAuthoring}
+                onUsePlugin={usePluginFromLibrary}
                 onCreatePluginShareProject={onCreatePluginShareProject}
               />
             ) : null}

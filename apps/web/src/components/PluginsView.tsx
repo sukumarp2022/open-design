@@ -86,6 +86,7 @@ const PLUGIN_SHARE_DETAILS: Record<PluginShareAction, {
 
 interface PluginsViewProps {
   onCreatePlugin?: (goal?: string) => void;
+  onUsePlugin?: (record: InstalledPluginRecord) => void;
   onCreatePluginShareProject?: (
     pluginId: string,
     action: PluginShareAction,
@@ -95,6 +96,7 @@ interface PluginsViewProps {
 
 export function PluginsView({
   onCreatePlugin,
+  onUsePlugin,
   onCreatePluginShareProject,
 }: PluginsViewProps) {
   const { locale } = useI18n();
@@ -161,6 +163,11 @@ export function PluginsView({
   }
 
   async function handleUsePlugin(record: InstalledPluginRecord) {
+    if (onUsePlugin) {
+      setDetailsRecord(null);
+      onUsePlugin(record);
+      return;
+    }
     setPendingApplyId(record.id);
     setNotice(null);
     const result = await applyPlugin(record.id, { locale });

@@ -68,6 +68,11 @@ interface PendingReplacement {
   confirm: () => void;
 }
 
+interface PendingPluginUseHandoff {
+  pluginId: string;
+  inputs?: Record<string, unknown>;
+}
+
 const AUTHORING_DEFAULT_SCENARIO_INPUTS = {
   artifactKind: 'Open Design plugin',
   audience: 'Open Design plugin authors',
@@ -111,6 +116,8 @@ export function HomeView({
   const [pendingChipId, setPendingChipId] = useState<string | null>(null);
   const [pendingAuthoringChipId, setPendingAuthoringChipId] = useState<string | null>(null);
   const [pendingAuthoringPrompt, setPendingAuthoringPrompt] = useState(PLUGIN_AUTHORING_PROMPT);
+  const [pendingPluginUseHandoff, setPendingPluginUseHandoff] =
+    useState<PendingPluginUseHandoff | null>(null);
   const [fallbackProjectKind, setFallbackProjectKind] = useState<ProjectKind | null>(null);
   const [active, setActive] = useState<ActivePlugin | null>(null);
   const [activeSkill, setActiveSkill] = useState<SkillSummary | null>(null);
@@ -156,18 +163,27 @@ export function HomeView({
   useEffect(() => {
     if (!promptHandoff || consumedHandoffIdRef.current === promptHandoff.id) return;
     consumedHandoffIdRef.current = promptHandoff.id;
+    setError(null);
+    if (promptHandoff.source === 'plugin-use') {
+      setPendingPluginUseHandoff({
+        pluginId: promptHandoff.pluginId,
+        ...(promptHandoff.inputs ? { inputs: promptHandoff.inputs } : {}),
+      });
+      if (promptHandoff.focus) {
+        requestAnimationFrame(() => inputRef.current?.focus());
+      }
+      return;
+    }
+
     setActive(null);
     setActiveSkill(null);
     setSelectedPluginContexts([]);
-    setError(null);
-    setFallbackProjectKind(promptHandoff.source === 'plugin-authoring' ? 'other' : null);
+    setFallbackProjectKind('other');
     setPrompt(promptHandoff.prompt);
     if (promptHandoff.focus) {
       requestAnimationFrame(() => inputRef.current?.focus());
     }
-    if (promptHandoff.source === 'plugin-authoring') {
-      setPendingAuthoringChipId('plugin-authoring');
-    }
+    setPendingAuthoringChipId('plugin-authoring');
   }, [promptHandoff]);
 
   const contextItemCount = useMemo(
@@ -348,6 +364,26 @@ export function HomeView({
     if (!query) return null;
     return renderPluginBriefTemplate(query, hydratePluginInputs(record.manifest?.od?.inputs ?? [], inputs));
   }
+
+  useEffect(() => {
+    if (!pendingPluginUseHandoff || pluginsLoading) return;
+    const record = plugins.find((plugin) => plugin.id === pendingPluginUseHandoff.pluginId);
+    setPendingPluginUseHandoff(null);
+    if (!record) {
+      setError(
+        `Plugin "${pendingPluginUseHandoff.pluginId}" is not installed. Refresh Plugins and try again.`,
+      );
+      return;
+    }
+    requestUsePlugin(
+      record,
+      undefined,
+      pendingPluginUseHandoff.inputs
+        ? { inputs: pendingPluginUseHandoff.inputs }
+        : undefined,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPluginUseHandoff, pluginsLoading, plugins]);
 
   function addPluginContext(record: InstalledPluginRecord, nextPrompt: string | null) {
     setSelectedPluginContexts((prev) => {
