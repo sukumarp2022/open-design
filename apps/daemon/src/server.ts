@@ -47,7 +47,6 @@ import { listDesignSystems, readDesignSystem, readDesignSystemAssets } from './d
 import {
   applyDiffReviewDecisionToCwd,
   applyPlugin,
-  defaultRegistryRoots,
   defaultBundledRoot,
   doctorPlugin,
   FIRST_PARTY_ATOMS,
@@ -63,6 +62,7 @@ import {
   pruneExpiredSnapshots,
   registerBuiltInAtomWorkers,
   registerBundledPlugins,
+  registryRootsForDataDir,
   resolvePluginSnapshot,
   runPipelineForRun,
   runStageWithRegistry,
@@ -1090,6 +1090,7 @@ const CRITIQUE_ARTIFACTS_DIR = path.join(RUNTIME_DATA_DIR, 'critique-artifacts')
 const PROJECTS_DIR = path.join(RUNTIME_DATA_DIR, 'projects');
 const USER_SKILLS_DIR = path.join(RUNTIME_DATA_DIR, 'skills');
 const USER_DESIGN_SYSTEMS_DIR = path.join(RUNTIME_DATA_DIR, 'design-systems');
+const PLUGIN_REGISTRY_ROOTS = registryRootsForDataDir(RUNTIME_DATA_DIR);
 // User-imported design templates mirror USER_SKILLS_DIR but are scanned
 // against DESIGN_TEMPLATES_DIR rather than SKILLS_DIR so the EntryView
 // Templates surface and the Settings → Skills surface stay decoupled.
@@ -1109,7 +1110,7 @@ const ALL_SKILL_LIKE_ROOTS = [
   DESIGN_TEMPLATES_DIR,
 ];
 fs.mkdirSync(PROJECTS_DIR, { recursive: true });
-for (const dir of [USER_SKILLS_DIR, USER_DESIGN_SYSTEMS_DIR, USER_DESIGN_TEMPLATES_DIR]) {
+for (const dir of [USER_SKILLS_DIR, USER_DESIGN_SYSTEMS_DIR, USER_DESIGN_TEMPLATES_DIR, PLUGIN_REGISTRY_ROOTS.userPluginsRoot]) {
   fs.mkdirSync(dir, { recursive: true });
 }
 fs.mkdirSync(CRITIQUE_ARTIFACTS_DIR, { recursive: true });
@@ -2699,7 +2700,7 @@ export async function startServer({
   });
 
   // Plan §3.F2 / spec §11.7 — daemon lifecycle status. Returns the
-  // host / port the server is bound to plus the data dir + namespace,
+  // host / port the server is bound to plus the data dir,
   // so `od daemon status --json` can render a one-shot health snapshot
   // without depending on /api/version's content shape.
   app.get('/api/daemon/status', async (_req, res) => {
@@ -2711,7 +2712,6 @@ export async function startServer({
       port: Number(process.env.OD_PORT ?? 7456),
       dataDir: RUNTIME_DATA_DIR,
       mediaConfigDir: process.env.OD_MEDIA_CONFIG_DIR ?? null,
-      namespace: process.env.OD_NAMESPACE ?? null,
       pid: process.pid,
       shuttingDown: daemonShuttingDown,
       installedPlugins: (() => {
@@ -4245,7 +4245,7 @@ export async function startServer({
     };
 
     try {
-      for await (const ev of installPlugin(db, { source })) {
+      for await (const ev of installPlugin(db, { source, roots: PLUGIN_REGISTRY_ROOTS })) {
         writeEvent(ev.kind, ev);
         if (ev.kind === 'success' || ev.kind === 'error') break;
       }
@@ -4258,7 +4258,7 @@ export async function startServer({
 
   app.post('/api/plugins/:id/uninstall', async (req, res) => {
     try {
-      const result = await uninstallPlugin(db, req.params.id, defaultRegistryRoots());
+      const result = await uninstallPlugin(db, req.params.id, PLUGIN_REGISTRY_ROOTS);
       if (!result.ok && !result.removedFolder) {
         return res.status(404).json({ error: 'plugin not found', warning: result.warning });
       }
@@ -4318,7 +4318,7 @@ export async function startServer({
     writeEvent('progress', { kind: 'progress', phase: 'resolving', message: `Upgrading ${id} from ${source}` });
 
     try {
-      for await (const ev of installPlugin(db, { source, eventKind: 'upgraded' })) {
+      for await (const ev of installPlugin(db, { source, roots: PLUGIN_REGISTRY_ROOTS, eventKind: 'upgraded' })) {
         writeEvent(ev.kind, ev);
         if (ev.kind === 'success' || ev.kind === 'error') break;
       }
@@ -6465,7 +6465,7 @@ export async function startServer({
       const log = [];
       let plugin = null;
       let message = 'Install finished.';
-      for await (const ev of installPlugin(db, { source: folder })) {
+      for await (const ev of installPlugin(db, { source: folder, roots: PLUGIN_REGISTRY_ROOTS })) {
         if (ev.message) log.push(ev.message);
         if (Array.isArray(ev.warnings)) warnings.splice(0, warnings.length, ...ev.warnings);
         if (ev.kind === 'success') {

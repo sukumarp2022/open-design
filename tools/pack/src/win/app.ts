@@ -152,7 +152,7 @@ export async function createWorkspaceTarballsCacheKey(config: ToolPackConfig): P
     packageManager: rootPackageJson.packageManager,
     pnpmLock: await hashPath(join(config.workspaceRoot, "pnpm-lock.yaml")),
     prebundle: shouldUseWinStandalonePrebundle(config.webOutputMode),
-    schemaVersion: 5,
+    schemaVersion: 6,
     webOutputMode: config.webOutputMode,
   });
 }

@@ -145,6 +145,20 @@ describe('applyPatchForStep — safety guards', () => {
     expect(result.reason).toMatch(/unsafe path/);
   });
 
+  it('refuses Windows absolute targets', async () => {
+    await seedPlan([
+      { id: 'naughty', files: ['C:/escape.ts'], rationale: '', risk: 'low', status: 'pending' },
+    ]);
+    const diff = `--- /dev/null
++++ b/C:/escape.ts
+@@ -0,0 +1,1 @@
++x
+`;
+    const result = await applyPatchForStep({ cwd, stepId: 'naughty', diff });
+    expect(result.status).toBe('failed');
+    expect(result.reason).toMatch(/unsafe path/);
+  });
+
   it('rejects context mismatches (stale patch detection)', async () => {
     await seedPlan([
       { id: 'rewrite-x', files: ['x.ts'], rationale: '', risk: 'low', status: 'pending' },

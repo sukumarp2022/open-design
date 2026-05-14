@@ -375,7 +375,7 @@ Deliverables
 
 - [x] `od daemon start --headless` flag (no electron, no web bundle).
 - [x] `od daemon start --serve-web` flag (web UI without electron). Today this is an alias of `--headless` because the v1 daemon serves both API and web UI from the same Express app; the flag is reserved so packaged callers can branch on it.
-- [x] Honor `OD_BIND_HOST`, `OD_PORT`, `OD_NAMESPACE` in headless mode (the flags forward into the env so the existing daemon code path picks them up unchanged).
+- [x] Honor `OD_BIND_HOST` and `OD_PORT` in headless mode (the flags forward into the env so the existing daemon code path picks them up unchanged).
 - [x] `od daemon stop`, `od daemon status --json`.
 
 Validation
@@ -549,7 +549,7 @@ These were originally spec §18 open questions; they are now resolved and propag
 v1 ships when **all** of the following pass on a clean Linux CI container without electron. Each row links to the daemon / e2e test path that asserts it.
 
 - [x] **e2e-1 cold install** — `od plugin install ./fixtures/sample-plugin` →
-  - `~/.open-design/plugins/sample-plugin/` exists.
+  - `<OD_DATA_DIR>/plugins/sample-plugin/` exists.
   - `installed_plugins` has one row with `trust='restricted'`, `source_kind='local'`.
   - Test path: `apps/daemon/tests/plugins-e2e-fixture.test.ts`
 - [x] **e2e-2 pure apply** — two consecutive applies share `manifestSourceDigest`; the project cwd byte size is unchanged; `applied_plugin_snapshots` is not written by `applyPlugin()` itself (the resolver is the writer).

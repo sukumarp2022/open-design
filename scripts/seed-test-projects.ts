@@ -9,12 +9,15 @@
 //   pnpm seed:test-projects                    # default bundle
 //   pnpm seed:test-projects --decks 2 --webs 2 # cap counts
 //   pnpm seed:test-projects --daemon http://127.0.0.1:17456
+//   pnpm seed:test-projects --namespace work-a     # discover tools-dev namespace
 //   pnpm seed:test-projects --offline          # ingest into ./.od before boot
 //   pnpm seed:test-projects --clear            # remove previously seeded projects
 //
 // The daemon URL is resolved in this order: --daemon flag > $OD_DAEMON_URL >
 // http://127.0.0.1:$OD_PORT > whatever `pnpm tools-dev status --json` reports
-// for the daemon app. The discovery step is what makes the two-shell flow
+// for the daemon app. --namespace is only passed to that tools-dev discovery
+// step; it is not forwarded to the od CLI or stored in daemon data. The
+// discovery step is what makes the two-shell flow
 // (`pnpm tools-dev` then `pnpm seed:test-projects`) work without extra flags,
 // because tools-dev defaults to an ephemeral daemon port that isn't exported
 // to sibling shells.
@@ -224,6 +227,7 @@ const COMMUNITY_PLUGINS: SeedFixture[] = [
 interface Args {
   daemonUrl: string | null;
   dataDir: string | null;
+  namespace: string | null;
   mode: SeedMode;
   decks: number;
   webs: number;
@@ -236,6 +240,7 @@ function parseArgs(argv: string[]): Args {
   const out: Args = {
     daemonUrl: null,
     dataDir: null,
+    namespace: null,
     mode: 'auto',
     decks: DECKS.length,
     webs: WEBS.length,
@@ -259,6 +264,13 @@ function parseArgs(argv: string[]): Args {
         process.exit(2);
       }
       out.dataDir = value;
+    } else if (a === '--namespace') {
+      const value = argv[++i];
+      if (!value) {
+        console.error('--namespace requires a name argument');
+        process.exit(2);
+      }
+      out.namespace = value;
     } else if (a === '--mode') {
       const value = argv[++i];
       if (value !== 'auto' && value !== 'online' && value !== 'offline') {
@@ -317,6 +329,9 @@ Options:
   --online           Alias for --mode online.
   --offline          Alias for --mode offline.
   --data-dir <dir>   Offline target data dir (default: \$OD_DATA_DIR or ./.od).
+  --namespace <name> Tools-dev namespace for online auto-discovery. This does
+                     not affect od CLI behavior. Offline mode requires
+                     --data-dir or OD_DATA_DIR when --namespace is set.
   --decks <n>        Number of slide decks to seed (default: ${DECKS.length}, max: ${DECKS.length})
   --webs <n>         Number of web prototypes to seed (default: ${WEBS.length}, max: ${WEBS.length})
   --default-plugins <n>
@@ -337,6 +352,8 @@ Online daemon URL resolution (first match wins):
      extra flags:
        pnpm tools-dev          # in one shell
        pnpm seed:test-projects # in another — discovers the running daemon
+     For a non-default tools-dev namespace, pass \`--namespace <name>\` so the
+     status lookup reads that namespace.
 
 Offline ingest before boot:
   pnpm seed:test-projects --offline --data-dir ./.od
@@ -353,7 +370,7 @@ function isDiscoverablePort(value: string | undefined): value is string {
   return Number.isInteger(n) && n > 0 && n < 65536;
 }
 
-async function discoverDaemonUrlFromToolsDev(): Promise<string | null> {
+async function discoverDaemonUrlFromToolsDev(namespace: string | null): Promise<string | null> {
   return await new Promise<string | null>((resolve) => {
     let child;
     try {
@@ -361,7 +378,9 @@ async function discoverDaemonUrlFromToolsDev(): Promise<string | null> {
       // engine" when the local node version doesn't match the repo's
       // engines.node). Without it, those warnings land on stdout under a
       // nested pnpm context and break the JSON parse below.
-      child = spawn('pnpm', ['--silent', 'exec', 'tools-dev', 'status', '--json'], {
+      const statusArgs = ['--silent', 'exec', 'tools-dev', 'status', '--json'];
+      if (namespace) statusArgs.push('--namespace', namespace);
+      child = spawn('pnpm', statusArgs, {
         cwd: REPO_ROOT,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -410,7 +429,7 @@ async function resolveDaemonUrl(args: Args, { required }: { required: boolean })
   if (isDiscoverablePort(process.env.OD_PORT)) {
     return `http://127.0.0.1:${process.env.OD_PORT}`;
   }
-  const discovered = await discoverDaemonUrlFromToolsDev();
+  const discovered = await discoverDaemonUrlFromToolsDev(args.namespace);
   if (discovered) return discovered;
   if (!required) return null;
   throw new Error(
@@ -576,6 +595,16 @@ function resolveDataDir(raw: string | null): string {
   return path.isAbsolute(expanded) ? expanded : path.resolve(REPO_ROOT, expanded);
 }
 
+function assertOfflineDataDirIsExplicit(args: Args): void {
+  if (args.namespace && !args.dataDir && !process.env.OD_DATA_DIR) {
+    throw new Error(
+      '--namespace is only a tools-dev discovery selector. Offline mode with ' +
+        '--namespace requires --data-dir or OD_DATA_DIR so the script does not ' +
+        'guess a namespace-scoped daemon data directory.',
+    );
+  }
+}
+
 function loadBetterSqlite(): new (filename: string) => OfflineDatabase {
   const daemonRequire = createRequire(path.join(REPO_ROOT, 'apps', 'daemon', 'package.json'));
   return daemonRequire('better-sqlite3') as new (filename: string) => OfflineDatabase;
@@ -664,6 +693,7 @@ function migrateOffline(db: OfflineDatabase): void {
 }
 
 async function openOfflineSeedContext(args: Args): Promise<OfflineSeedContext> {
+  assertOfflineDataDirIsExplicit(args);
   const dataDir = resolveDataDir(args.dataDir);
   await mkdir(dataDir, { recursive: true });
   const Database = loadBetterSqlite();

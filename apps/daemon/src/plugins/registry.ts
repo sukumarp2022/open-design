@@ -1,7 +1,7 @@
 // Plugin registry. Phase 1 scope:
 //
-// - Scans `<userHome>/.open-design/plugins/<id>/` (the OD-canonical install
-//   root) for manifest folders.
+// - Scans `<daemonDataDir>/plugins/<id>/` (the OD-canonical install root) for
+//   manifest folders.
 // - Resolves a plugin folder into either an `open-design.json`-anchored
 //   manifest or a synthesized one derived from `SKILL.md` /
 //   `.claude-plugin/plugin.json` (per spec §3 compatibility matrix).
@@ -14,7 +14,6 @@
 // schema migration.
 
 import path from 'node:path';
-import os from 'node:os';
 import fs from 'node:fs';
 import { promises as fsp } from 'node:fs';
 import {
@@ -37,14 +36,19 @@ type SqliteDb = Database.Database;
 type DbRow = Record<string, unknown>;
 
 export interface RegistryRoots {
-  // Defaults to `<os.homedir()>/.open-design/plugins/`.
+  // User-installed plugin bytes. Production passes a daemon data-root-derived
+  // value; tests can point this at a sandbox.
   userPluginsRoot: string;
 }
 
-export function defaultRegistryRoots(): RegistryRoots {
+export function registryRootsForDataDir(dataDir: string): RegistryRoots {
   return {
-    userPluginsRoot: path.join(os.homedir(), '.open-design', 'plugins'),
+    userPluginsRoot: path.join(dataDir, 'plugins'),
   };
+}
+
+export function defaultRegistryRoots(): RegistryRoots {
+  return registryRootsForDataDir(path.resolve(process.env.OD_DATA_DIR ?? path.join(process.cwd(), '.od')));
 }
 
 export interface ScannedPlugin {

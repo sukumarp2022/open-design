@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const runWebStandaloneAfterPack = require("../resources/web-standalone-after-pack.cjs") as (context: unknown) => Promise<void>;
 
 const CONFIG_ENV = "OD_TOOLS_PACK_WEB_STANDALONE_HOOK_CONFIG";
+const darwinSymlinkIt = process.platform === "win32" ? it.skip : it;
 
 async function pathExists(filePath: string): Promise<boolean> {
   try {
@@ -246,7 +247,7 @@ describe("web standalone afterPack hook", () => {
     }
   });
 
-  it("rewrites darwin copied pnpm symlinks to stay inside the packaged resource", async () => {
+  darwinSymlinkIt("rewrites darwin copied pnpm symlinks to stay inside the packaged resource", async () => {
     const fixture = await runFixture({
       includeWebNext: true,
       platformName: "darwin",

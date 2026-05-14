@@ -183,16 +183,20 @@ async function copyOptional(sourcePath, destinationPath, options = {}) {
   return true;
 }
 
-async function linkRelative(sourcePath, destinationPath) {
+async function linkRelative(sourcePath, destinationPath, options = {}) {
   if (!(await pathExists(sourcePath))) return false;
   if (await pathLstatExists(destinationPath)) return false;
   await mkdir(path.dirname(destinationPath), { recursive: true });
+  if (options.copyInsteadOfSymlink === true) {
+    await copyRequired(sourcePath, destinationPath, { dereference: true });
+    return true;
+  }
   const relativeTarget = path.relative(path.dirname(destinationPath), sourcePath);
   await symlink(relativeTarget.length === 0 ? "." : relativeTarget, destinationPath);
   return true;
 }
 
-async function linkPnpmPublicHoist(destinationRoot) {
+async function linkPnpmPublicHoist(destinationRoot, options = {}) {
   const nodeModulesRoot = path.join(destinationRoot, "node_modules");
   const hoistRoot = path.join(nodeModulesRoot, ".pnpm", "node_modules");
   const entries = await readdir(hoistRoot, { withFileTypes: true }).catch(() => []);
@@ -205,13 +209,13 @@ async function linkPnpmPublicHoist(destinationRoot) {
       for (const scopedEntry of scopedEntries) {
         const scopedSource = path.join(sourcePath, scopedEntry);
         const scopedDestination = path.join(nodeModulesRoot, entry.name, scopedEntry);
-        if (await linkRelative(scopedSource, scopedDestination)) linked.push(scopedDestination);
+        if (await linkRelative(scopedSource, scopedDestination, options)) linked.push(scopedDestination);
       }
       continue;
     }
 
     const destinationPath = path.join(nodeModulesRoot, entry.name);
-    if (await linkRelative(sourcePath, destinationPath)) linked.push(destinationPath);
+    if (await linkRelative(sourcePath, destinationPath, options)) linked.push(destinationPath);
   }
 
   return linked;
@@ -243,7 +247,7 @@ async function installStandaloneResource(config, resourcesRoot, platformName) {
   await copyRequired(path.join(sourceWebRoot, "server.js"), path.join(destinationWebRoot, "server.js"));
   await copyOptional(path.join(sourceWebRoot, "package.json"), path.join(destinationWebRoot, "package.json"));
   const copiedNestedNodeModules = await copyOptional(path.join(sourceWebRoot, "node_modules"), path.join(destinationWebRoot, "node_modules"), copyOptions);
-  const linkedHoistEntries = await linkPnpmPublicHoist(destinationRoot);
+  const linkedHoistEntries = await linkPnpmPublicHoist(destinationRoot, { copyInsteadOfSymlink: platformName === "win32" });
   await copyRequired(path.join(sourceWebRoot, ".next"), path.join(destinationWebRoot, ".next"));
   const copiedStatic = await copyOptional(config.webStaticSourceRoot, path.join(destinationWebRoot, ".next", "static"));
   const copiedPublic = await copyOptional(config.webPublicSourceRoot, path.join(destinationWebRoot, "public"));

@@ -450,12 +450,12 @@ Multiple marketplaces coexist — the user runs `od marketplace add <url>` to re
 | -------- | ------------------------------------------------ | ------------------ | ---------------------------------------------------------------------- |
 | 1        | `<projectCwd>/.open-design/plugins/<id>/`        | plugin bundle      | New; explicitly installed into the project and committed with user code |
 | 2        | `<projectCwd>/.claude/skills/<id>/`              | legacy `SKILL.md`  | Keeps the project-private skill path from [`skills-protocol.md`](skills-protocol.md) compatible |
-| 3        | `~/.open-design/plugins/<id>/`                   | plugin bundle      | New; written by `od plugin install`                                    |
+| 3        | `<daemonDataDir>/plugins/<id>/`                  | plugin bundle      | New; written by `od plugin install` under the daemon data root          |
 | 4        | `~/.open-design/skills/<id>/`                    | legacy `SKILL.md`  | OD canonical skill install path; may symlink into other agents          |
 | 5        | `~/.claude/skills/<id>/`                         | legacy `SKILL.md`  | Compatibility scan for external Claude Code / skills tooling            |
 | 6        | repo root `skills/`, `design-systems/`, `craft/` | bundled resources  | Existing first-party resources, unchanged                              |
 
-Conflict resolution uses normalized `name` / plugin id; lower numeric priority wins. Legacy `SKILL.md` locations are synthesized into plugin records by the adapter, but are not copied into `~/.open-design/plugins/` unless the user explicitly runs `od plugin install`. This keeps existing Claude skills zero-config while giving plugin bundles a clear install root.
+Conflict resolution uses normalized `name` / plugin id; lower numeric priority wins. Legacy `SKILL.md` locations are synthesized into plugin records by the adapter, but are not copied into `<daemonDataDir>/plugins/` unless the user explicitly runs `od plugin install`. This keeps existing Claude skills zero-config while giving plugin bundles a clear install root.
 
 ### 7.2 Install sources
 
@@ -1389,12 +1389,12 @@ od atoms list              [--json]                       # first-party atoms (�
 #### Daemon control (new)
 
 ```
-od daemon start  [--headless] [--serve-web] [--port <n>] [--host <h>] [--namespace <ns>]
+od daemon start  [--headless] [--serve-web] [--port <n>] [--host <h>]
                                                            # explicit lifecycle (§11.7);
                                                            # default `od` (no args) keeps current behavior
-od daemon stop   [--namespace <ns>]
+od daemon stop   [--daemon-url <url>]
 od daemon status [--json]                                   # alias of `od status`
-od status        [--json]                                   # daemon up? port? namespace? installed plugins count
+od status        [--json]                                   # daemon up? port? installed plugins count
 od doctor                                                   # diagnostics: skills/DS/craft/plugins, providers, MCP
 od version       [--json]
 od config get|set|list|unset  [--key ...] [--value ...]     # backed by media-config.json + db
@@ -1428,7 +1428,7 @@ od mcp live-artifacts        # specialized MCP server
 
 | Exit | Meaning | Recovery hint | Structured stderr `data` (excerpt) |
 | --- | --- | --- | --- |
-| 64 | Daemon not running | `od status`, then start daemon | `{ host, port, namespace }` |
+| 64 | Daemon not running | `od status`, then start daemon | `{ host, port }` |
 | 65 | Plugin not found / not installed | `od plugin list` then `od plugin install <source>` | `{ pluginId, candidateSources[] }` |
 | 66 | Plugin restricted, capability required | `od plugin trust <id> --caps …` or retry with `--grant-caps …` | `{ pluginId, pluginVersion, required[], granted[], remediation[] }` |
 | 67 | Required input missing on apply | re-run with `--input k=v` for each missing field | `{ pluginId, missing[], schema }` |
@@ -1617,7 +1617,7 @@ Three paths the operator should mount as volumes; they map onto existing OD env 
 
 | Mount path        | Env var                  | Purpose                                                |
 | ----------------- | ------------------------ | ------------------------------------------------------ |
-| `/data/od`        | `OD_DATA_DIR`            | Projects, SQLite, artifacts, installed plugins (`.od/` and `~/.open-design/plugins/` collapse here) |
+| `/data/od`        | `OD_DATA_DIR`            | Projects, SQLite, artifacts, installed plugins (`<OD_DATA_DIR>/plugins`) |
 | `/data/config`    | `OD_MEDIA_CONFIG_DIR`    | Provider credentials (`media-config.json`)             |
 | `/data/marketplaces` | (under `OD_DATA_DIR`)  | Cached marketplace indexes                             |
 
@@ -1632,7 +1632,6 @@ OD_PORT=17456
 OD_BIND_HOST=0.0.0.0                 # the variable the daemon already reads ([`apps/daemon/src/server.ts`](../apps/daemon/src/server.ts))
 OD_DATA_DIR=/data/od
 OD_MEDIA_CONFIG_DIR=/data/config
-OD_NAMESPACE=production              # multi-tenant isolation key
 OD_TRUST_DEFAULT=restricted          # safe default for hosted (§9) — introduced in Phase 5
 OD_AGENT_BACKEND=claude              # default code agent backend
 OD_API_TOKEN=<random>                # required when OD_BIND_HOST != 127.0.0.1 — Phase 5 introduces the bearer middleware
@@ -1755,7 +1754,7 @@ Phase 1 contents (merges the original Phase 1 with the minimum subset of the ori
 - Endpoints: `GET /api/plugins`, `GET /api/plugins/:id`, `POST /api/plugins/install` (folder + github tarball), `POST /api/plugins/:id/uninstall`, `POST /api/plugins/:id/apply`, `GET /api/atoms`, `GET /api/applied-plugins/:snapshotId`.
 - **Plugin CLI verbs:** `od plugin install/list/info/uninstall/apply/doctor`. `od plugin apply --json` is required by Phase 2's inline rail and by external code agents, and must already return an `ApplyResult` containing `appliedPlugin: AppliedPluginSnapshot`.
 - **Headless MVP CLI loop (newly pulled forward):** `od project create/list/info`, `od run start/watch/cancel` (with `--follow` and ND-JSON streaming), `od files list/read`. These wrap endpoints already used by the desktop UI today (`POST /api/projects`, `POST /api/runs`, `GET /api/runs/:id/events`, project list/read endpoints) — no new HTTP surface, only CLI surface.
-- `~/.open-design/plugins/<id>/` write path with safe extraction (path-traversal guard, size cap, symlink rejection).
+- `<daemonDataDir>/plugins/<id>/` write path with safe extraction (path-traversal guard, size cap, symlink rejection).
 
 Validation:
 
@@ -1957,7 +1956,7 @@ Open questions worth confirming before code lands:
 - **`od plugin run` headless contract** — sufficient as-is, or also expose an HTTP POST endpoint for non-CLI agents? (Default: CLI only in v1; HTTP added in Phase 4 if needed.)
 - **Multi-tenant auth (per-user OAuth, RBAC, project ownership, billing)** is explicitly out of scope for v1. The Docker image is single-tenant by design (one `OD_API_TOKEN`). Multi-tenancy is a post-v1 story that needs its own spec — confirm this scoping is acceptable for the first ecosystem release.
 - **Trust propagation in hosted mode** — current spec locks arbitrary GitHub / URL / local plugins to `restricted` by default, and third-party marketplaces do not propagate trust by default. Confirm whether hosted deployments may trust individual plugins through `OD_TRUSTED_PLUGINS`, or whether operators must first trust the source marketplace.
-- **Discovery-time hot reload** — should the daemon watch `~/.open-design/plugins/` for filesystem changes (developer ergonomics), or only reload after `od plugin install/update/uninstall` (stability)? (Default: watch, with a 500ms debounce.)
+- **Discovery-time hot reload** — should the daemon watch `<daemonDataDir>/plugins/` for filesystem changes (developer ergonomics), or only reload after `od plugin install/update/uninstall` (stability)? (Default: watch, with a 500ms debounce.)
 - **Versioning policy** — pin to a tag/SHA on install, or always track the default branch with an opt-in pin? (Default: pin to the resolved ref at install time; `od plugin update` re-resolves.)
 - ~~**When to lift the plugin prompt block into contracts**~~ — **resolved (PB1, see `docs/plans/plugins-implementation.md` §7).** Lift in Phase 2A as a pure `renderPluginBlock(snapshot)` function in `packages/contracts/src/prompts/plugin-block.ts`; both composers import it; v1 fallback rejection rule (§11.8) is preserved; Phase 4 turns on fallback support as a one-line wiring change. The Phase 1–4 byte-equality CI fixture is no longer needed.
 - ~~**`AppliedPluginSnapshot` retention**~~ — **resolved (PB2, see `docs/plans/plugins-implementation.md` §7).** Snapshots referenced by any run / conversation / project stay pinned forever (`expires_at = NULL`); unreferenced snapshots get `expires_at = applied_at + OD_SNAPSHOT_UNREFERENCED_TTL_DAYS` (default `30`, `0` disables). The "expire even referenced rows" knob `OD_SNAPSHOT_RETENTION_DAYS` is operator-opt-in only (default unset), and applies only when the referencing row is terminal. The `expires_at` column lands in Phase 1 (§11.4); the GC worker lands in Phase 5 (§16). The `od plugin snapshots prune` CLI remains as a forced-cleanup escape hatch.
@@ -2314,7 +2313,7 @@ Three categories cover everything OD does today:
 | --- | --- | --- |
 | **A. Userspace (movable to plugin)** | A first-party plugin's manifest + SKILL.md | atom prompt fragments, default reference pipelines, atom-bundled MCP servers, critique scoring axes, discovery question wording |
 | **B. Kernel (must stay in daemon)** | `apps/daemon/src/...` | snapshot SQLite writes, GenUI persistence + reuse, capability gate + tool-token issuance, devloop scheduler + `until` evaluator + ceiling, OAuth token storage, `composeSystemPrompt()` *as assembler*, project metadata block |
-| **C. Already plugin-driven in v1** | Already in `~/.open-design/plugins/...` or per-project plugin folders | Active SKILL.md, DESIGN.md, craft .md, plugin-declared MCP servers, plugin-declared GenUI surfaces, plugin-declared pipelines |
+| **C. Already plugin-driven in v1** | Already in `<daemonDataDir>/plugins/...` or per-project plugin folders | Active SKILL.md, DESIGN.md, craft .md, plugin-declared MCP servers, plugin-declared GenUI surfaces, plugin-declared pipelines |
 
 The category-B list is the **kernel boundary**: not "these things would be hard to plugin-ize", but "these things must stay in the daemon for security, persistence, or runtime-state reasons." A plugin runtime that lets plugins write `applied_plugin_snapshots` rows or issue connector tool tokens is a broken runtime.
 
@@ -2383,7 +2382,7 @@ The `bundled` tier is what makes patches 2 and 3 safe: the daemon does not capab
 Daemon startup adds a step:
 
 1. Walk `<repo-root>/plugins/_official/**` and register every plugin under `installed_plugins.source_kind='bundled'`, `trust='bundled'`, capabilities = the plugin's declared `od.capabilities`.
-2. Bundled plugins are not copied into `~/.open-design/plugins/`; they live and reload from the repo path so daemon upgrades replace them in lockstep with daemon code.
+2. Bundled plugins are not copied into `<daemonDataDir>/plugins/`; they live and reload from the repo path so daemon upgrades replace them in lockstep with daemon code.
 3. `od plugin uninstall` refuses to uninstall a `bundled` plugin (would break the daemon); `od plugin update` is a no-op for bundled.
 4. A user may install a `trusted` or `restricted` plugin with the same id as a bundled one; the user-installed copy wins for normal apply, but the daemon retains the bundled copy as a fallback for replays of older `AppliedPluginSnapshot` rows that pinned the bundled version.
 

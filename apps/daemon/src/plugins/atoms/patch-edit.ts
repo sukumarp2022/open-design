@@ -179,8 +179,9 @@ export async function applyPatchForStep(input: ApplyPatchInput): Promise<ApplyPa
       added += result.added;
       removed += result.removed;
     } catch (err) {
+      const touched = hunk.targetFile ?? hunk.sourceFile ?? '<unknown>';
       return { status: 'failed', filesTouched: [...filesTouched], added, removed,
-               reason: `hunk apply failed for ${hunk.targetFile}: ${(err as Error).message}` };
+               reason: `hunk apply failed for ${touched}: ${(err as Error).message}` };
     }
   }
 
@@ -314,30 +315,42 @@ function parseHunkHeader(line: string): { oldStart: number; oldLines: number; ne
   };
 }
 
+function resolvePatchFile(cwd: string, file: string): string {
+  const unsafe = `unsafe path '${file}'`;
+  if (file.includes('\0')) throw new Error(unsafe);
+  if (/^[A-Za-z]:/.test(file)) throw new Error(unsafe);
+  if (path.isAbsolute(file) || path.win32.isAbsolute(file) || path.posix.isAbsolute(file)) {
+    throw new Error(unsafe);
+  }
+  if (file.replace(/\\/g, '/').split('/').some((segment) => segment === '..')) {
+    throw new Error(unsafe);
+  }
+  const abs = path.resolve(cwd, file);
+  const relative = path.relative(cwd, abs);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(unsafe);
+  }
+  return abs;
+}
+
 async function applyOneFileHunks(cwd: string, bundle: FileHunkBundle): Promise<{ added: number; removed: number }> {
   if (bundle.sourceFile === null && bundle.targetFile === null) {
     throw new Error('hunk has /dev/null on both sides');
   }
-  // Path-traversal guard.
-  for (const f of [bundle.sourceFile, bundle.targetFile]) {
-    if (f && (f.startsWith('/') || f.includes('..'))) {
-      throw new Error(`unsafe path '${f}'`);
-    }
-  }
+  const sourceAbs = bundle.sourceFile === null ? null : resolvePatchFile(cwd, bundle.sourceFile);
+  const targetAbs = bundle.targetFile === null ? null : resolvePatchFile(cwd, bundle.targetFile);
 
   if (bundle.targetFile === null) {
     // File deletion.
-    const abs = path.join(cwd, bundle.sourceFile!);
     let body: string;
-    try { body = await fsp.readFile(abs, 'utf8'); } catch { throw new Error(`file not found: ${bundle.sourceFile}`); }
-    await fsp.unlink(abs);
+    try { body = await fsp.readFile(sourceAbs!, 'utf8'); } catch { throw new Error(`file not found: ${bundle.sourceFile}`); }
+    await fsp.unlink(sourceAbs!);
     return { added: 0, removed: body.split('\n').length };
   }
 
   if (bundle.sourceFile === null) {
     // File creation.
-    const abs = path.join(cwd, bundle.targetFile);
-    await fsp.mkdir(path.dirname(abs), { recursive: true });
+    await fsp.mkdir(path.dirname(targetAbs!), { recursive: true });
     let added = 0;
     const lines: string[] = [];
     for (const hunk of bundle.hunks) {
@@ -346,14 +359,13 @@ async function applyOneFileHunks(cwd: string, bundle: FileHunkBundle): Promise<{
         else if (l === '' || l.startsWith('\\')) { /* trailing newline marker */ }
       }
     }
-    await atomicWriteFile(abs, lines.join('\n') + (lines.length > 0 ? '\n' : ''));
+    await atomicWriteFile(targetAbs!, lines.join('\n') + (lines.length > 0 ? '\n' : ''));
     return { added, removed: 0 };
   }
 
   // Plain edit.
-  const abs = path.join(cwd, bundle.targetFile);
   let original: string;
-  try { original = await fsp.readFile(abs, 'utf8'); } catch { throw new Error(`file not found: ${bundle.targetFile}`); }
+  try { original = await fsp.readFile(targetAbs!, 'utf8'); } catch { throw new Error(`file not found: ${bundle.targetFile}`); }
   const originalLines = original.split('\n');
   // Trailing newline produces an empty last element after split; we
   // preserve that and add it back at the end.
@@ -373,7 +385,7 @@ async function applyOneFileHunks(cwd: string, bundle: FileHunkBundle): Promise<{
     working = result.working;
   }
   const final = working.join('\n') + (trailingNL ? '\n' : '');
-  await atomicWriteFile(abs, final);
+  await atomicWriteFile(targetAbs!, final);
   return { added, removed };
 }
 

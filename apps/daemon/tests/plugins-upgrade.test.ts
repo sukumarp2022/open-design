@@ -68,7 +68,7 @@ describe('od plugin upgrade — installer round-trip', () => {
     await writeSource('1.0.1', { description: 'with notes' });
 
     // Upgrade re-runs the installer against the recorded source.
-    await drain(installPlugin(db, { source: before!.source }) as AsyncGenerator<unknown>);
+    await drain(installPlugin(db, { source: before!.source, roots: { userPluginsRoot: pluginsRoot } }) as AsyncGenerator<unknown>);
     const after = getInstalledPlugin(db, 'upgrade-fixture');
     expect(after?.version).toBe('1.0.1');
     expect(after?.manifest.description).toBe('with notes');
@@ -77,7 +77,7 @@ describe('od plugin upgrade — installer round-trip', () => {
   it('re-running with the same source on disk is idempotent on the registry version', async () => {
     await drain(installFromLocalFolder(db, { source: sourceFolder, roots: { userPluginsRoot: pluginsRoot } }) as AsyncGenerator<unknown>);
     const before = getInstalledPlugin(db, 'upgrade-fixture');
-    await drain(installPlugin(db, { source: before!.source }) as AsyncGenerator<unknown>);
+    await drain(installPlugin(db, { source: before!.source, roots: { userPluginsRoot: pluginsRoot } }) as AsyncGenerator<unknown>);
     const after = getInstalledPlugin(db, 'upgrade-fixture');
     expect(after?.version).toBe(before!.version);
     expect(after?.id).toBe(before!.id);
@@ -87,7 +87,7 @@ describe('od plugin upgrade — installer round-trip', () => {
     await drain(installFromLocalFolder(db, { source: sourceFolder, roots: { userPluginsRoot: pluginsRoot } }) as AsyncGenerator<unknown>);
     const before = getInstalledPlugin(db, 'upgrade-fixture');
     await writeSource('1.0.2');
-    await drain(installPlugin(db, { source: before!.source }) as AsyncGenerator<unknown>);
+    await drain(installPlugin(db, { source: before!.source, roots: { userPluginsRoot: pluginsRoot } }) as AsyncGenerator<unknown>);
 
     // The on-disk manifest the installer just wrote should match the
     // one in the SQLite row.

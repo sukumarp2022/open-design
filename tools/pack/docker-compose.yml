@@ -39,7 +39,6 @@ services:
       # exposing to the public internet. Phase 5 wires the daemon to
       # refuse OD_BIND_HOST=0.0.0.0 without OD_API_TOKEN.
       OD_API_TOKEN: ${OD_API_TOKEN:-}
-      OD_NAMESPACE: ${OD_NAMESPACE:-production}
       # Snapshot retention knobs (spec §11.4 PB2). Default ttl is 30
       # days; set to 0 to keep snapshots forever.
       OD_SNAPSHOT_UNREFERENCED_TTL_DAYS: ${OD_SNAPSHOT_UNREFERENCED_TTL_DAYS:-30}

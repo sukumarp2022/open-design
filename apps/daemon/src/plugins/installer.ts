@@ -3,7 +3,8 @@
 //   - `./folder` / `/abs/path`     — local-copy backend (Phase 1).
 //   - `github:owner/repo[@ref][/subpath]` — fetched from
 //     codeload.github.com as a tar.gz, extracted into a temp dir, then
-//     copied into ~/.open-design/plugins/<id>/ via the local backend.
+//     copied into the daemon data-root-derived plugin registry via the local
+//     backend.
 //   - `https://…tar.gz` / `…tgz`   — same extraction path, no path-rewrite.
 //
 // Hard install constraints (spec §7.2 / plan §3.A6):
@@ -55,8 +56,8 @@ export type InstallEvent = InstallProgressEvent | InstallSuccessEvent | InstallE
 
 export interface InstallOptions {
   source: string;
-  // Forwarded via env override or CLI flag; defaults to defaultRegistryRoots()
-  // so daemon tests can point at a sandboxed home.
+  // Forwarded from daemon runtime context; defaults to defaultRegistryRoots()
+  // so daemon tests can point at a sandboxed data root.
   roots?: RegistryRoots;
   // 50 MiB default mirrors spec §7.2; tests pin a tighter cap.
   maxBytes?: number;

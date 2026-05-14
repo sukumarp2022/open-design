@@ -41,6 +41,7 @@ describe('GET /api/daemon/status', () => {
       pid: unknown;
       installedPlugins: unknown;
       shuttingDown: boolean;
+      namespace?: unknown;
     };
     expect(body.ok).toBe(true);
     expect(typeof body.version === 'string' || typeof body.version === 'object').toBe(true);
@@ -49,6 +50,7 @@ describe('GET /api/daemon/status', () => {
     expect(typeof body.pid).toBe('number');
     expect(typeof body.installedPlugins).toBe('number');
     expect(body.shuttingDown).toBe(false);
+    expect(body).not.toHaveProperty('namespace');
   });
 });
 

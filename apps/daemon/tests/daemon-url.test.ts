@@ -1,22 +1,16 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createJsonIpcServer, type JsonIpcServerHandle } from "@open-design/sidecar";
 import { SIDECAR_ENV, SIDECAR_MESSAGES } from "@open-design/sidecar-proto";
-import { resolveMcpDaemonUrl, MCP_DEFAULT_DAEMON_URL } from "../src/mcp-daemon-url.js";
-
-// On Windows the sidecar IPC contract switches to named pipes whose
-// names are not relocatable via OD_SIDECAR_IPC_BASE, so the discovery
-// case cannot use a per-test temp socket; skip just that case there.
-const ipcTest = process.platform === "win32" ? test.skip : test;
+import { resolveDaemonUrl, DEFAULT_DAEMON_URL } from "../src/daemon-url.js";
 
 // Verifies the resolution chain: --daemon-url > OD_DAEMON_URL > sidecar
-// IPC status discovery > legacy default. Each layer must short-circuit
-// the next so the spawned `od mcp` follows the live daemon across
-// restarts without re-pasting the install snippet.
+// IPC status discovery > legacy default. Each layer must short-circuit the next
+// so `od` clients follow the live daemon across ephemeral-port restarts.
 
-describe("resolveMcpDaemonUrl", () => {
+describe("resolveDaemonUrl", () => {
   let ipcBaseDir: string;
 
   beforeAll(() => {
@@ -28,44 +22,40 @@ describe("resolveMcpDaemonUrl", () => {
   });
 
   it("prefers the explicit --daemon-url flag", async () => {
-    const url = await resolveMcpDaemonUrl({
+    const url = await resolveDaemonUrl({
       flagUrl: "http://flag.example:1111",
       env: {
         OD_DAEMON_URL: "http://env.example:2222",
-        [SIDECAR_ENV.IPC_BASE]: ipcBaseDir,
+        [SIDECAR_ENV.IPC_PATH]: path.join(ipcBaseDir, "daemon.sock"),
       },
     });
     expect(url).toBe("http://flag.example:1111");
   });
 
   it("falls back to OD_DAEMON_URL when no flag given", async () => {
-    const url = await resolveMcpDaemonUrl({
+    const url = await resolveDaemonUrl({
       env: {
         OD_DAEMON_URL: "http://env.example:2222",
-        [SIDECAR_ENV.IPC_BASE]: ipcBaseDir,
+        [SIDECAR_ENV.IPC_PATH]: path.join(ipcBaseDir, "daemon.sock"),
       },
     });
     expect(url).toBe("http://env.example:2222");
   });
 
   it("returns the legacy default when no flag/env/socket is available", async () => {
-    const url = await resolveMcpDaemonUrl({
+    const url = await resolveDaemonUrl({
       env: {
-        // Point IPC discovery at a directory with no socket; discovery
-        // should fail silently and we fall back to the default.
-        [SIDECAR_ENV.IPC_BASE]: ipcBaseDir,
-        [SIDECAR_ENV.NAMESPACE]: "missing-ns",
+        [SIDECAR_ENV.IPC_PATH]: path.join(ipcBaseDir, "missing.sock"),
       },
       timeoutMs: 200,
     });
-    expect(url).toBe(MCP_DEFAULT_DAEMON_URL);
+    expect(url).toBe(DEFAULT_DAEMON_URL);
   });
 
-  ipcTest("discovers the live daemon URL via the sidecar IPC status socket", async () => {
-    const namespace = "discover-test";
-    const namespaceDir = path.join(ipcBaseDir, namespace);
-    fs.mkdirSync(namespaceDir, { recursive: true });
-    const socketPath = path.join(namespaceDir, "daemon.sock");
+  it("discovers the live daemon URL via the concrete sidecar IPC status endpoint", async () => {
+    const socketPath = process.platform === "win32"
+      ? `\\\\.\\pipe\\open-design-daemon-url-${process.pid}-${Date.now()}`
+      : path.join(ipcBaseDir, "daemon.sock");
     let ipc: JsonIpcServerHandle | null = null;
     try {
       ipc = await createJsonIpcServer({
@@ -87,10 +77,9 @@ describe("resolveMcpDaemonUrl", () => {
         },
       });
 
-      const url = await resolveMcpDaemonUrl({
+      const url = await resolveDaemonUrl({
         env: {
-          [SIDECAR_ENV.IPC_BASE]: ipcBaseDir,
-          [SIDECAR_ENV.NAMESPACE]: namespace,
+          [SIDECAR_ENV.IPC_PATH]: socketPath,
         },
         timeoutMs: 1000,
       });
