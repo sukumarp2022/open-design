@@ -281,6 +281,25 @@ function renderMetadataBlock(
     );
   }
 
+  if (Array.isArray(metadata.contextPlugins) && metadata.contextPlugins.length > 0) {
+    lines.push('');
+    lines.push('### @ plugin context');
+    lines.push(
+      'The user selected these plugins as additive context via @ mentions. Treat them as requested references to combine with the brief; only the explicit active plugin block, if present, is the executable/pinned plugin snapshot.',
+    );
+    for (const plugin of metadata.contextPlugins) {
+      const id = typeof plugin.id === 'string' ? plugin.id : '';
+      const title = typeof plugin.title === 'string' && plugin.title.trim().length > 0
+        ? plugin.title.trim()
+        : id;
+      if (!id && !title) continue;
+      const description = typeof plugin.description === 'string' && plugin.description.trim().length > 0
+        ? ` — ${plugin.description.trim()}`
+        : '';
+      lines.push(`- ${title}${id ? ` (\`${id}\`)` : ''}${description}`);
+    }
+  }
+
   // Curated prompt template reference for image/video projects. Inlined
   // verbatim (with light truncation) so the agent can borrow structure,
   // mood and phrasing without a separate fetch. The user may have edited

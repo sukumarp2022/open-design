@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ApplyResult,
+  InputFieldSpec,
   McpServerConfig,
   InstalledPluginRecord,
   ProjectKind,
@@ -45,6 +46,10 @@ interface ActivePlugin {
   // is safe to render without a result.
   result: ApplyResult | null;
   inputs: Record<string, unknown>;
+  inputFields: InputFieldSpec[];
+  inputsValid: boolean;
+  queryTemplate: string | null;
+  lastRenderedPrompt: string | null;
   // Stage B of plugin-driven-flow-plan: when the user applied this
   // plugin through the Home chip rail, the chip carries the project
   // kind we should stamp on the resulting create payload. `null` =
@@ -52,6 +57,15 @@ interface ActivePlugin {
   // kind defaults to the historical 'prototype' value.
   projectKind: ProjectKind | null;
   chipId: string | null;
+}
+
+interface SelectedPluginContext {
+  record: InstalledPluginRecord;
+}
+
+interface PendingReplacement {
+  title: string;
+  confirm: () => void;
 }
 
 const AUTHORING_DEFAULT_SCENARIO_INPUTS = {
@@ -100,11 +114,13 @@ export function HomeView({
   const [fallbackProjectKind, setFallbackProjectKind] = useState<ProjectKind | null>(null);
   const [active, setActive] = useState<ActivePlugin | null>(null);
   const [activeSkill, setActiveSkill] = useState<SkillSummary | null>(null);
+  const [selectedPluginContexts, setSelectedPluginContexts] = useState<SelectedPluginContext[]>([]);
   const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const [mcpLoading, setMcpLoading] = useState(true);
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [detailsRecord, setDetailsRecord] = useState<InstalledPluginRecord | null>(null);
+  const [pendingReplacement, setPendingReplacement] = useState<PendingReplacement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const consumedHandoffIdRef = useRef<number | null>(null);
 
@@ -142,6 +158,7 @@ export function HomeView({
     consumedHandoffIdRef.current = promptHandoff.id;
     setActive(null);
     setActiveSkill(null);
+    setSelectedPluginContexts([]);
     setError(null);
     setFallbackProjectKind(promptHandoff.source === 'plugin-authoring' ? 'other' : null);
     setPrompt(promptHandoff.prompt);
@@ -154,8 +171,8 @@ export function HomeView({
   }, [promptHandoff]);
 
   const contextItemCount = useMemo(
-    () => active?.result?.contextItems?.length ?? 0,
-    [active],
+    () => (active?.result?.contextItems?.length ?? 0) + selectedPluginContexts.length,
+    [active, selectedPluginContexts],
   );
 
   // When the active plugin was bound through a chip, the badge shows
@@ -187,7 +204,19 @@ export function HomeView({
     nextPrompt?: string | null,
     options?: { projectKind?: ProjectKind; chipId?: string; inputs?: Record<string, unknown> },
   ) {
-    setPendingApplyId(record.id);
+    const inputFields = record.manifest?.od?.inputs ?? [];
+    const optimisticInputs = hydratePluginInputs(inputFields, options?.inputs);
+    const inputsValid = pluginInputsAreValid(inputFields, optimisticInputs);
+    const queryTemplate =
+      nextPrompt !== undefined && nextPrompt !== null
+        ? null
+        : resolvePluginQueryFallback(record.manifest?.od?.useCase?.query, locale) || null;
+    const optimisticPrompt =
+      nextPrompt !== undefined && nextPrompt !== null
+        ? nextPrompt
+        : queryTemplate
+          ? renderPluginBriefTemplate(queryTemplate, optimisticInputs)
+          : null;
     if (options?.chipId) setPendingChipId(options.chipId);
     setError(null);
     // Optimistic update: the chip already carries the inputs and the
@@ -198,21 +227,14 @@ export function HomeView({
     // items in the background and we reconcile in place. Without this
     // the user sees a ~100-500ms freeze before the input back-fills,
     // which feels like the UI is jammed.
-    const optimisticInputs: Record<string, unknown> = { ...(options?.inputs ?? {}) };
-    const manifestQuery = resolvePluginQueryFallback(
-      record.manifest?.od?.useCase?.query,
-      locale,
-    );
-    const optimisticPrompt =
-      nextPrompt !== undefined && nextPrompt !== null
-        ? nextPrompt
-        : manifestQuery
-          ? renderPluginBriefTemplate(manifestQuery, optimisticInputs)
-          : null;
     setActive({
       record,
       result: null,
       inputs: optimisticInputs,
+      inputFields,
+      inputsValid,
+      queryTemplate,
+      lastRenderedPrompt: optimisticPrompt,
       projectKind: options?.projectKind ?? null,
       chipId: options?.chipId ?? null,
     });
@@ -221,15 +243,18 @@ export function HomeView({
     if (optimisticPrompt !== null) setPrompt(optimisticPrompt);
     requestAnimationFrame(() => inputRef.current?.focus());
 
-    const result = await applyPlugin(record.id, { locale, inputs: options?.inputs });
-    setPendingApplyId(null);
-    setPendingChipId(null);
+    if (!inputsValid) {
+      setPendingChipId(null);
+      return;
+    }
+
+    const result = await resolveActivePlugin(record, optimisticInputs);
     if (!result) {
       // Roll back the optimistic active so submit can't fire against a
       // plugin that never bound. Only clear when the in-flight apply
       // still matches the visible active state — concurrent clicks
       // would otherwise stomp a successful later apply.
-      setActive((prev) => (prev?.record.id === record.id ? null : prev));
+      setActive((prev) => (prev?.record.id === record.id ? { ...prev, inputsValid: false } : prev));
       setError(`Failed to apply ${record.title}. Make sure the daemon is reachable.`);
       return;
     }
@@ -241,7 +266,13 @@ export function HomeView({
     }
     setActive((prev) =>
       prev && prev.record.id === record.id
-        ? { ...prev, result, inputs: reconciledInputs }
+        ? {
+            ...prev,
+            result,
+            inputs: reconciledInputs,
+            inputFields: result.inputs ?? inputFields,
+            inputsValid: pluginInputsAreValid(result.inputs ?? inputFields, reconciledInputs),
+          }
         : prev,
     );
     // The daemon may have filled in `topic`/`audience` defaults the
@@ -259,9 +290,100 @@ export function HomeView({
         const reconciledPrompt = renderPluginBriefTemplate(reconciledQuery, reconciledInputs);
         if (reconciledPrompt !== optimisticPrompt) {
           setPrompt((current) => (current === optimisticPrompt ? reconciledPrompt : current));
+          setActive((prev) =>
+            prev && prev.record.id === record.id
+              ? { ...prev, lastRenderedPrompt: reconciledPrompt }
+              : prev,
+          );
         }
       }
     }
+  }
+
+  async function resolveActivePlugin(
+    record: InstalledPluginRecord,
+    inputs: Record<string, unknown>,
+  ): Promise<ApplyResult | null> {
+    setPendingApplyId(record.id);
+    const result = await applyPlugin(record.id, { locale, inputs });
+    setPendingApplyId(null);
+    setPendingChipId(null);
+    return result;
+  }
+
+  function requestUsePlugin(
+    record: InstalledPluginRecord,
+    nextPrompt?: string | null,
+    options?: { projectKind?: ProjectKind; chipId?: string; inputs?: Record<string, unknown> },
+  ) {
+    const replacement = previewPluginReplacement(record, nextPrompt, options?.inputs);
+    runWithReplacementConfirmation(record.title, replacement, () => {
+      void usePlugin(record, nextPrompt, options);
+    });
+  }
+
+  function runWithReplacementConfirmation(
+    title: string,
+    replacementPrompt: string | null,
+    confirm: () => void,
+  ) {
+    if (
+      replacementPrompt !== null &&
+      prompt.trim().length > 0 &&
+      prompt.trim() !== replacementPrompt.trim()
+    ) {
+      setPendingReplacement({ title, confirm });
+      return;
+    }
+    confirm();
+  }
+
+  function previewPluginReplacement(
+    record: InstalledPluginRecord,
+    nextPrompt?: string | null,
+    inputs?: Record<string, unknown>,
+  ): string | null {
+    if (nextPrompt !== undefined && nextPrompt !== null) return nextPrompt;
+    const query = resolvePluginQueryFallback(record.manifest?.od?.useCase?.query, locale);
+    if (!query) return null;
+    return renderPluginBriefTemplate(query, hydratePluginInputs(record.manifest?.od?.inputs ?? [], inputs));
+  }
+
+  function addPluginContext(record: InstalledPluginRecord, nextPrompt: string | null) {
+    setSelectedPluginContexts((prev) => {
+      if (prev.some((item) => item.record.id === record.id)) return prev;
+      return [...prev, { record }];
+    });
+    if (nextPrompt !== null) setPrompt(nextPrompt);
+    setError(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function removePluginContext(pluginId: string) {
+    setSelectedPluginContexts((prev) => prev.filter((item) => item.record.id !== pluginId));
+  }
+
+  function updateActiveInputs(next: Record<string, unknown>) {
+    if (!active) return;
+    const inputsValid = pluginInputsAreValid(active.inputFields, next);
+    const nextRendered =
+      active.queryTemplate !== null
+        ? renderPluginBriefTemplate(active.queryTemplate, next)
+        : active.lastRenderedPrompt;
+    if (
+      active.queryTemplate !== null &&
+      nextRendered !== null &&
+      (prompt === active.lastRenderedPrompt || prompt.trim().length === 0)
+    ) {
+      setPrompt(nextRendered);
+    }
+    setActive({
+      ...active,
+      inputs: next,
+      inputsValid,
+      result: inputsEqual(active.result?.appliedPlugin?.inputs, next) ? active.result : null,
+      lastRenderedPrompt: nextRendered,
+    });
   }
 
   function clearActivePlugin() {
@@ -286,14 +408,16 @@ export function HomeView({
 
   function queuePluginAuthoring(chipId: string | null, goal?: string) {
     const nextPrompt = goal ? buildPluginAuthoringPrompt(goal) : PLUGIN_AUTHORING_PROMPT;
-    setActive(null);
-    setActiveSkill(null);
-    setFallbackProjectKind('other');
-    setError(null);
-    setPrompt(nextPrompt);
-    setPendingAuthoringPrompt(nextPrompt);
-    setPendingAuthoringChipId(chipId ?? 'plugin-authoring');
-    requestAnimationFrame(() => inputRef.current?.focus());
+    runWithReplacementConfirmation('Plugin authoring', nextPrompt, () => {
+      setActive(null);
+      setActiveSkill(null);
+      setFallbackProjectKind('other');
+      setError(null);
+      setPrompt(nextPrompt);
+      setPendingAuthoringPrompt(nextPrompt);
+      setPendingAuthoringChipId(chipId ?? 'plugin-authoring');
+      requestAnimationFrame(() => inputRef.current?.focus());
+    });
   }
 
   useEffect(() => {
@@ -335,7 +459,7 @@ export function HomeView({
           );
           return;
         }
-        void usePlugin(record, undefined, {
+        requestUsePlugin(record, undefined, {
           projectKind: chip.action.projectKind,
           chipId: chip.id,
           inputs: chip.action.inputs,
@@ -365,19 +489,41 @@ export function HomeView({
     }
   }
 
-  function submit() {
+  async function submit() {
     const trimmed = prompt.trim();
     if (!trimmed) return;
+    let submittedActive = active;
+    if (submittedActive && !submittedActive.inputsValid) {
+      setError('Fill the required plugin parameters before running.');
+      return;
+    }
+    if (submittedActive && !submittedActive.result) {
+      const result = await resolveActivePlugin(submittedActive.record, submittedActive.inputs);
+      if (!result) {
+        setError(`Failed to apply ${submittedActive.record.title}. Check the plugin parameters and try again.`);
+        return;
+      }
+      submittedActive = { ...submittedActive, result };
+      setActive(submittedActive);
+    }
+    const contextPlugins = selectedPluginContexts.map((item) => ({
+      id: item.record.id,
+      title: item.record.title,
+      ...(item.record.manifest?.description
+        ? { description: item.record.manifest.description }
+        : {}),
+    }));
     const defaultInputs = { prompt: trimmed };
     onSubmit({
       prompt: trimmed,
-      pluginId: active?.record.id ?? DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
+      pluginId: submittedActive?.record.id ?? DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
       skillId: activeSkill?.id ?? null,
-      appliedPluginSnapshotId: active?.result?.appliedPlugin?.snapshotId ?? null,
-      pluginTitle: active?.record.title ?? null,
-      taskKind: active?.result?.appliedPlugin?.taskKind ?? null,
-      pluginInputs: active ? active.inputs : defaultInputs,
-      projectKind: active?.projectKind ?? fallbackProjectKind ?? projectKindForSkill(activeSkill) ?? 'other',
+      appliedPluginSnapshotId: submittedActive?.result?.appliedPlugin?.snapshotId ?? null,
+      pluginTitle: submittedActive?.record.title ?? null,
+      taskKind: submittedActive?.result?.appliedPlugin?.taskKind ?? null,
+      pluginInputs: submittedActive ? submittedActive.inputs : defaultInputs,
+      projectKind: submittedActive?.projectKind ?? fallbackProjectKind ?? projectKindForSkill(activeSkill) ?? 'other',
+      contextPlugins,
     });
   }
 
@@ -394,6 +540,15 @@ export function HomeView({
         activeChipId={active?.chipId ?? null}
         onClearActivePlugin={clearActivePlugin}
         onClearActiveSkill={() => setActiveSkill(null)}
+        selectedPluginContexts={selectedPluginContexts.map((item) => item.record)}
+        onRemovePluginContext={removePluginContext}
+        onOpenPluginDetails={setDetailsRecord}
+        pluginInputFields={active?.inputFields ?? []}
+        pluginInputValues={active?.inputs ?? {}}
+        onPluginInputValuesChange={updateActiveInputs}
+        onPluginInputValidityChange={(valid) => {
+          setActive((prev) => (prev ? { ...prev, inputsValid: valid } : prev));
+        }}
         pluginOptions={plugins}
         pluginsLoading={pluginsLoading}
         skillOptions={selectableSkills}
@@ -402,8 +557,12 @@ export function HomeView({
         mcpLoading={mcpLoading}
         pendingPluginId={pendingApplyId}
         pendingChipId={pendingChipId}
-        submitDisabled={Boolean(pendingApplyId) || Boolean(pendingAuthoringChipId)}
-        onPickPlugin={(record, nextPrompt) => void usePlugin(record, nextPrompt)}
+        submitDisabled={
+          Boolean(pendingApplyId) ||
+          Boolean(pendingAuthoringChipId) ||
+          Boolean(active && !active.inputsValid)
+        }
+        onPickPlugin={(record, nextPrompt) => addPluginContext(record, nextPrompt)}
         onPickSkill={useSkill}
         onPickMcp={useMcpServer}
         onPickChip={pickChip}
@@ -423,7 +582,7 @@ export function HomeView({
         loading={pluginsLoading}
         activePluginId={active?.record.id ?? null}
         pendingApplyId={pendingApplyId}
-        onUse={(record) => void usePlugin(record)}
+        onUse={(record) => requestUsePlugin(record)}
         onOpenDetails={setDetailsRecord}
         onCreatePlugin={(goal) => queuePluginAuthoring(null, goal)}
         onBrowseRegistry={onBrowseRegistry}
@@ -433,9 +592,44 @@ export function HomeView({
         <PluginDetailsModal
           record={detailsRecord}
           onClose={() => setDetailsRecord(null)}
-          onUse={(record) => void usePlugin(record)}
+          onUse={(record) => requestUsePlugin(record)}
           isApplying={pendingApplyId === detailsRecord.id}
         />
+      ) : null}
+      {pendingReplacement ? (
+        <div className="home-hero-confirm__backdrop" role="presentation">
+          <div
+            className="home-hero-confirm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="home-hero-confirm-title"
+          >
+            <h2 id="home-hero-confirm-title">Replace current prompt?</h2>
+            <p>
+              Using {pendingReplacement.title} will replace the text currently in the input.
+            </p>
+            <div className="home-hero-confirm__actions">
+              <button
+                type="button"
+                className="home-hero-confirm__secondary"
+                onClick={() => setPendingReplacement(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="home-hero-confirm__primary"
+                onClick={() => {
+                  const action = pendingReplacement.confirm;
+                  setPendingReplacement(null);
+                  action();
+                }}
+              >
+                Replace
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );
@@ -450,4 +644,39 @@ function projectKindForSkill(skill: SkillSummary | null): ProjectKind | null {
   if (skill.mode === 'video' || skill.surface === 'video') return 'video';
   if (skill.mode === 'audio' || skill.surface === 'audio') return 'audio';
   return 'other';
+}
+
+function hydratePluginInputs(
+  fields: InputFieldSpec[],
+  provided: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...(provided ?? {}) };
+  for (const field of fields) {
+    if (next[field.name] === undefined && field.default !== undefined) {
+      next[field.name] = field.default;
+    }
+  }
+  return next;
+}
+
+function pluginInputsAreValid(
+  fields: InputFieldSpec[],
+  values: Record<string, unknown>,
+): boolean {
+  return fields.every((field) => {
+    if (!field.required) return true;
+    const value = values[field.name];
+    return value !== undefined && value !== null && value !== '';
+  });
+}
+
+function inputsEqual(
+  left: Record<string, unknown> | undefined,
+  right: Record<string, unknown>,
+): boolean {
+  if (!left) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key, idx) => key === rightKeys[idx] && left[key] === right[key]);
 }

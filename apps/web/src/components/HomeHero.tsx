@@ -9,9 +9,10 @@
 
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { InstalledPluginRecord, McpServerConfig } from '@open-design/contracts';
+import type { InputFieldSpec, InstalledPluginRecord, McpServerConfig } from '@open-design/contracts';
 import type { SkillSummary } from '../types';
 import { Icon, type IconName } from './Icon';
+import { PluginInputsForm } from './PluginInputsForm';
 import {
   chipsForGroup,
   type ChipGroup,
@@ -32,6 +33,13 @@ interface Props {
   activeSkillId?: string | null;
   activeSkillTitle?: string | null;
   onClearActiveSkill?: () => void;
+  selectedPluginContexts?: InstalledPluginRecord[];
+  onRemovePluginContext?: (pluginId: string) => void;
+  onOpenPluginDetails?: (record: InstalledPluginRecord) => void;
+  pluginInputFields?: InputFieldSpec[];
+  pluginInputValues?: Record<string, unknown>;
+  onPluginInputValuesChange?: (values: Record<string, unknown>) => void;
+  onPluginInputValidityChange?: (valid: boolean) => void;
   pluginOptions: InstalledPluginRecord[];
   pluginsLoading: boolean;
   skillOptions?: SkillSummary[];
@@ -57,6 +65,7 @@ interface HomeMentionOption {
   title: string;
   description: string;
   meta: string;
+  pluginRecord?: InstalledPluginRecord;
   disabled?: boolean;
   onPick: () => void;
 }
@@ -78,6 +87,13 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     activeChipId,
     onClearActivePlugin,
     onClearActiveSkill = () => undefined,
+    selectedPluginContexts = [],
+    onRemovePluginContext = () => undefined,
+    onOpenPluginDetails = () => undefined,
+    pluginInputFields = [],
+    pluginInputValues = {},
+    onPluginInputValuesChange = () => undefined,
+    onPluginInputValidityChange = () => undefined,
     pluginOptions,
     pluginsLoading,
     skillOptions = [],
@@ -98,6 +114,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mentionTab, setMentionTab] = useState<HomeMentionTab>('all');
+  const [hoveredPlugin, setHoveredPlugin] = useState<InstalledPluginRecord | null>(null);
   const composingRef = useRef(false);
   const canSubmit = prompt.trim().length > 0 && !submitDisabled;
   const placeholder = activePluginTitle || activeSkillTitle
@@ -148,6 +165,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
             title: plugin.title,
             description: plugin.manifest?.description ?? plugin.id,
             meta: pendingPluginId === plugin.id ? 'Applying…' : getPluginSourceLabel(plugin),
+            pluginRecord: plugin,
             disabled: pendingPluginId !== null,
             onPick: () => pickPlugin(plugin),
           })),
@@ -193,8 +211,12 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     if (selectedIndex >= visiblePickerOptions.length) setSelectedIndex(0);
   }, [selectedIndex, visiblePickerOptions.length]);
 
+  useEffect(() => {
+    if (!pickerOpen) setHoveredPlugin(null);
+  }, [pickerOpen]);
+
   function pickPlugin(record: InstalledPluginRecord) {
-    const nextPrompt = mention ? replaceMentionToken(prompt, mention) : null;
+    const nextPrompt = mention ? replaceMentionToken(prompt, mention) ?? '' : prompt;
     onPickPlugin(record, nextPrompt);
   }
 
@@ -231,8 +253,34 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
       </p>
 
       <div className="home-hero__input-card">
-        {activePluginTitle || activeSkillTitle ? (
+        {activePluginTitle || activeSkillTitle || selectedPluginContexts.length > 0 ? (
           <div className="home-hero__active">
+            {selectedPluginContexts.map((plugin) => (
+              <span
+                key={plugin.id}
+                className="home-hero__active-chip home-hero__active-chip--context"
+                data-testid={`home-hero-context-plugin-${plugin.id}`}
+              >
+                <button
+                  type="button"
+                  className="home-hero__active-chip-body"
+                  onClick={() => onOpenPluginDetails(plugin)}
+                  title={`Plugin: ${plugin.title}`}
+                >
+                  <span className="home-hero__active-dot" aria-hidden />
+                  <span>@{plugin.title}</span>
+                </button>
+                <button
+                  type="button"
+                  className="home-hero__active-clear"
+                  onClick={() => onRemovePluginContext(plugin.id)}
+                  aria-label={`Remove plugin ${plugin.title}`}
+                  title="Remove plugin"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
             {activePluginTitle ? (
               <span className="home-hero__active-chip" data-testid="home-hero-active-plugin">
                 <span className="home-hero__active-dot" aria-hidden />
@@ -331,6 +379,14 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
           aria-controls={pickerOpen ? 'home-hero-context-picker' : undefined}
           aria-expanded={pickerOpen}
         />
+        {pluginInputFields.length > 0 ? (
+          <PluginInputsForm
+            fields={pluginInputFields}
+            values={pluginInputValues}
+            onChange={onPluginInputValuesChange}
+            onValidityChange={onPluginInputValidityChange}
+          />
+        ) : null}
         {pickerOpen ? (
           <div
             id="home-hero-context-picker"
@@ -385,7 +441,10 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
                       className={`home-hero__plugin-option${
                         optionIndex === selectedIndex ? ' is-active' : ''
                       }`}
-                      onMouseEnter={() => setSelectedIndex(optionIndex)}
+                      onMouseEnter={() => {
+                        setSelectedIndex(optionIndex);
+                        setHoveredPlugin(item.pluginRecord ?? null);
+                      }}
                       onMouseDown={(event) => {
                         event.preventDefault();
                         if (!item.disabled) item.onPick();
@@ -407,6 +466,33 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
                 })}
               </div>
             ))}
+            {hoveredPlugin ? (
+              <div
+                className="home-hero__plugin-hover-card"
+                data-testid="home-hero-plugin-hover-card"
+              >
+                <div>
+                  <span className="home-hero__plugin-hover-kicker">
+                    {getPluginSourceLabel(hoveredPlugin)}
+                  </span>
+                  <strong>{hoveredPlugin.title}</strong>
+                  <p>{hoveredPlugin.manifest?.description ?? hoveredPlugin.id}</p>
+                </div>
+                <div className="home-hero__plugin-hover-meta">
+                  <span>{(hoveredPlugin.manifest?.od?.inputs ?? []).length} parameters</span>
+                  {getPluginQueryPreview(hoveredPlugin) ? (
+                    <span>{getPluginQueryPreview(hoveredPlugin)}</span>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onOpenPluginDetails(hoveredPlugin)}
+                >
+                  Details
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
         <div className="home-hero__input-foot">
@@ -552,6 +638,20 @@ function mcpServerMatchesQuery(server: McpServerConfig, query: string): boolean 
 
 function getPluginSourceLabel(plugin: InstalledPluginRecord): string {
   return plugin.sourceKind === 'bundled' ? 'Official' : 'My plugin';
+}
+
+function getPluginQueryPreview(plugin: InstalledPluginRecord): string {
+  const raw = plugin.manifest?.od?.useCase?.query;
+  const value =
+    typeof raw === 'string'
+      ? raw
+      : raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? raw.en ?? raw['zh-CN'] ?? Object.values(raw).find((entry): entry is string => (
+            typeof entry === 'string' && entry.length > 0
+          )) ?? ''
+        : '';
+  const trimmed = value.replace(/\s+/g, ' ').trim();
+  return trimmed.length > 96 ? `${trimmed.slice(0, 96)}…` : trimmed;
 }
 
 interface RailGroupProps {

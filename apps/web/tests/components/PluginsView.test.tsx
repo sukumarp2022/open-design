@@ -189,8 +189,9 @@ describe('PluginsView', () => {
   it('shows installed plugins and available registry entries', async () => {
     render(<PluginsView />);
 
-    await waitFor(() => expect(screen.getAllByText('Official Plugin').length).toBeGreaterThan(0));
+    expect(await screen.findByText('Installed plugins')).toBeTruthy();
     expect(screen.getAllByText('User Plugin').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Official Plugin')).toBeNull();
 
     const availableTab = screen.getByTestId('plugins-tab-available');
     const sourcesTab = screen.getByTestId('plugins-tab-sources');

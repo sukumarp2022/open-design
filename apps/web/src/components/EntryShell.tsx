@@ -331,6 +331,9 @@ export function EntryShell({
         : fallbackName;
     const metadata: ProjectMetadata = {
       kind: payload.projectKind ?? 'prototype',
+      ...(payload.contextPlugins && payload.contextPlugins.length > 0
+        ? { contextPlugins: payload.contextPlugins }
+        : {}),
     };
     onCreateProject({
       name,

@@ -86,6 +86,10 @@ export interface ProjectMetadata {
   promptTemplate?: PromptTemplateMetadata;
   // Absolute paths to local code folders the agent can read via --add-dir.
   linkedDirs?: string[];
+  // Plugins selected through @ mentions on Home. These are additive
+  // context references; the explicit "Use plugin" snapshot, when present,
+  // remains the primary executable plugin for the run.
+  contextPlugins?: Array<{ id: string; title: string; description?: string }>;
 }
 
 export interface Project {

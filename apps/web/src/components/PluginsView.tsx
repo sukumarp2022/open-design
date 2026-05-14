@@ -45,7 +45,7 @@ const PLUGINS_TABS: ReadonlyArray<{
   label: string;
   hint: string;
 }> = [
-  { id: 'installed', label: 'Installed', hint: 'Ready to use' },
+  { id: 'installed', label: 'Installed', hint: 'Your plugins' },
   { id: 'available', label: 'Available', hint: 'From sources' },
   { id: 'sources', label: 'Sources', hint: 'Catalogs' },
   { id: 'team', label: 'Team', hint: 'Enterprise' },
@@ -136,10 +136,6 @@ export function PluginsView({
     return () => window.removeEventListener('open-design:plugins-changed', refresh);
   }, []);
 
-  const officialPlugins = useMemo(
-    () => plugins.filter((plugin) => plugin.sourceKind === 'bundled'),
-    [plugins],
-  );
   const userPlugins = useMemo(
     () => plugins.filter((plugin) => USER_SOURCE_KINDS.has(plugin.sourceKind)),
     [plugins],
@@ -281,7 +277,7 @@ export function PluginsView({
       </header>
 
       <div className="plugins-view__stats" aria-label="Plugin summary">
-        <StatCard label="Installed" value={plugins.length} />
+        <StatCard label="Installed" value={userPlugins.length} />
         <StatCard label="Available" value={availablePlugins.length} />
         <StatCard label="Sources" value={marketplaces.length} />
       </div>
@@ -317,37 +313,22 @@ export function PluginsView({
         {loading ? <div className="plugins-view__empty">Loading plugins…</div> : null}
 
         {!loading && activeTab === 'installed' ? (
-          <>
-            <PluginsHomeSection
-              plugins={officialPlugins}
-              loading={false}
-              activePluginId={activePlugin?.record.id ?? null}
-              pendingApplyId={pendingApplyId}
-              pendingShareAction={pendingShareAction}
-              onUse={(record) => void handleUsePlugin(record)}
-              onOpenDetails={setDetailsRecord}
-              onCreatePlugin={onCreatePlugin}
-              title="Official"
-              subtitle="Bundled Open Design workflows already available in this runtime."
-              emptyMessage="No official plugins are registered yet. Restart the daemon if this looks wrong."
-            />
-            <PluginsHomeSection
-              plugins={userPlugins}
-              loading={false}
-              activePluginId={activePlugin?.record.id ?? null}
-              pendingApplyId={pendingApplyId}
-              pendingShareAction={pendingShareAction}
-              onUse={(record) => void handleUsePlugin(record)}
-              onOpenDetails={setDetailsRecord}
-              onPluginShareAction={(record, action) =>
-                requestPluginShareTask(record, action)
-              }
-              onCreatePlugin={onCreatePlugin}
-              title="My plugins"
-              subtitle="Local, imported, and marketplace-installed plugins in your user registry."
-              emptyMessage="No user plugins yet. Use Create / Import or install an Available entry."
-            />
-          </>
+          <PluginsHomeSection
+            plugins={userPlugins}
+            loading={false}
+            activePluginId={activePlugin?.record.id ?? null}
+            pendingApplyId={pendingApplyId}
+            pendingShareAction={pendingShareAction}
+            onUse={(record) => void handleUsePlugin(record)}
+            onOpenDetails={setDetailsRecord}
+            onPluginShareAction={(record, action) =>
+              requestPluginShareTask(record, action)
+            }
+            onCreatePlugin={onCreatePlugin}
+            title="Installed plugins"
+            subtitle="Plugins you imported or installed from marketplace sources."
+            emptyMessage="No installed user plugins yet. Use Create / Import or install an Available entry."
+          />
         ) : null}
 
         {!loading && activeTab === 'available' ? (
