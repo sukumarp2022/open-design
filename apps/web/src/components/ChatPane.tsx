@@ -998,7 +998,7 @@ function UserMessage({
     const ok = await copyToClipboard(message.content);
     if (!ok) return;
     setCopied(true);
-    copyTimerRef.current = window.setTimeout(() => {
+    copyTimerRef.current = setTimeout(() => {
       setCopied(false);
       copyTimerRef.current = undefined;
     }, 2000);
