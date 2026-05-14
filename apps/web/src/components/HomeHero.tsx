@@ -9,9 +9,10 @@
 
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { InstalledPluginRecord, McpServerConfig } from '@open-design/contracts';
+import type { InputFieldSpec, InstalledPluginRecord, McpServerConfig } from '@open-design/contracts';
 import type { SkillSummary } from '../types';
 import { Icon, type IconName } from './Icon';
+import { PluginInputsForm } from './PluginInputsForm';
 import {
   chipsForGroup,
   type ChipGroup,
@@ -32,6 +33,14 @@ interface Props {
   activeSkillId?: string | null;
   activeSkillTitle?: string | null;
   onClearActiveSkill?: () => void;
+  selectedPluginContexts?: InstalledPluginRecord[];
+  onRemovePluginContext?: (pluginId: string) => void;
+  onOpenPluginDetails?: (record: InstalledPluginRecord) => void;
+  pluginInputFields?: InputFieldSpec[];
+  pluginInputValues?: Record<string, unknown>;
+  pluginInputTemplate?: string | null;
+  onPluginInputValuesChange?: (values: Record<string, unknown>) => void;
+  onPluginInputValidityChange?: (valid: boolean) => void;
   pluginOptions: InstalledPluginRecord[];
   pluginsLoading: boolean;
   skillOptions?: SkillSummary[];
@@ -57,6 +66,7 @@ interface HomeMentionOption {
   title: string;
   description: string;
   meta: string;
+  pluginRecord?: InstalledPluginRecord;
   disabled?: boolean;
   onPick: () => void;
 }
@@ -78,6 +88,14 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     activeChipId,
     onClearActivePlugin,
     onClearActiveSkill = () => undefined,
+    selectedPluginContexts = [],
+    onRemovePluginContext = () => undefined,
+    onOpenPluginDetails = () => undefined,
+    pluginInputFields = [],
+    pluginInputValues = {},
+    pluginInputTemplate = null,
+    onPluginInputValuesChange = () => undefined,
+    onPluginInputValidityChange = () => undefined,
     pluginOptions,
     pluginsLoading,
     skillOptions = [],
@@ -98,6 +116,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mentionTab, setMentionTab] = useState<HomeMentionTab>('all');
+  const [hoveredPlugin, setHoveredPlugin] = useState<InstalledPluginRecord | null>(null);
   const composingRef = useRef(false);
   const canSubmit = prompt.trim().length > 0 && !submitDisabled;
   const placeholder = activePluginTitle || activeSkillTitle
@@ -148,6 +167,7 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
             title: plugin.title,
             description: plugin.manifest?.description ?? plugin.id,
             meta: pendingPluginId === plugin.id ? 'Applying…' : getPluginSourceLabel(plugin),
+            pluginRecord: plugin,
             disabled: pendingPluginId !== null,
             onPick: () => pickPlugin(plugin),
           })),
@@ -188,13 +208,21 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
     (mentionTab === 'plugins' && pluginsLoading) ||
     (mentionTab === 'skills' && skillsLoading) ||
     (mentionTab === 'mcp' && mcpLoading);
+  const promptHighlightParts = useMemo(
+    () => buildPromptHighlightParts(pluginInputTemplate, pluginInputValues, prompt),
+    [pluginInputTemplate, pluginInputValues, prompt],
+  );
 
   useEffect(() => {
     if (selectedIndex >= visiblePickerOptions.length) setSelectedIndex(0);
   }, [selectedIndex, visiblePickerOptions.length]);
 
+  useEffect(() => {
+    if (!pickerOpen) setHoveredPlugin(null);
+  }, [pickerOpen]);
+
   function pickPlugin(record: InstalledPluginRecord) {
-    const nextPrompt = mention ? replaceMentionToken(prompt, mention) : null;
+    const nextPrompt = mention ? replaceMentionToken(prompt, mention) ?? '' : prompt;
     onPickPlugin(record, nextPrompt);
   }
 
@@ -231,8 +259,34 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
       </p>
 
       <div className="home-hero__input-card">
-        {activePluginTitle || activeSkillTitle ? (
+        {activePluginTitle || activeSkillTitle || selectedPluginContexts.length > 0 ? (
           <div className="home-hero__active">
+            {selectedPluginContexts.map((plugin) => (
+              <span
+                key={plugin.id}
+                className="home-hero__active-chip home-hero__active-chip--context"
+                data-testid={`home-hero-context-plugin-${plugin.id}`}
+              >
+                <button
+                  type="button"
+                  className="home-hero__active-chip-body"
+                  onClick={() => onOpenPluginDetails(plugin)}
+                  title={`Plugin: ${plugin.title}`}
+                >
+                  <span className="home-hero__active-dot" aria-hidden />
+                  <span>@{plugin.title}</span>
+                </button>
+                <button
+                  type="button"
+                  className="home-hero__active-clear"
+                  onClick={() => onRemovePluginContext(plugin.id)}
+                  aria-label={`Remove plugin ${plugin.title}`}
+                  title="Remove plugin"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
             {activePluginTitle ? (
               <span className="home-hero__active-chip" data-testid="home-hero-active-plugin">
                 <span className="home-hero__active-dot" aria-hidden />
@@ -273,64 +327,107 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
             ) : null}
           </div>
         ) : null}
-        <textarea
-          ref={ref}
-          className="home-hero__input"
-          data-testid="home-hero-input"
-          value={prompt}
-          onChange={(e) => {
-            onPromptChange(e.target.value);
-            setSelectedIndex(0);
-          }}
-          onCompositionStart={() => {
-            composingRef.current = true;
-          }}
-          onCompositionEnd={() => {
-            composingRef.current = false;
-          }}
-          onKeyDown={(e) => {
-            if (isImeComposing(e, composingRef.current)) return;
-            if (pickerOpen && visiblePickerOptions.length > 0) {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setSelectedIndex((idx) => (idx + 1) % visiblePickerOptions.length);
-                return;
-              }
-              if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setSelectedIndex(
-                  (idx) => (idx - 1 + visiblePickerOptions.length) % visiblePickerOptions.length,
-                );
-                return;
-              }
-              if (e.key === 'Tab') {
-                e.preventDefault();
-                const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
-                if (selected && !selected.disabled) selected.onPick();
-                return;
-              }
-            }
-            if (
-              e.key === 'Enter' &&
-              !e.shiftKey &&
-              !e.metaKey &&
-              !e.ctrlKey &&
-              !e.altKey
-            ) {
-              e.preventDefault();
-              if (pickerOpen && visiblePickerOptions.length > 0) {
-                const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
-                if (selected && !selected.disabled) selected.onPick();
-                return;
-              }
-              if (canSubmit) onSubmit();
-            }
-          }}
-          placeholder={placeholder}
-          rows={3}
-          aria-controls={pickerOpen ? 'home-hero-context-picker' : undefined}
-          aria-expanded={pickerOpen}
-        />
+        <div
+          className={`home-hero__prompt-surface${
+            pluginInputFields.length > 0 ? ' home-hero__prompt-surface--with-inputs' : ''
+          }`}
+        >
+          <div
+            className={`home-hero__prompt-editor${
+              promptHighlightParts ? ' home-hero__prompt-editor--highlighted' : ''
+            }`}
+          >
+            {promptHighlightParts ? (
+              <div
+                className="home-hero__prompt-highlight"
+                data-testid="home-hero-prompt-highlight"
+                aria-hidden
+              >
+                {promptHighlightParts.map((part, index) => (
+                  part.kind === 'slot' ? (
+                    <span
+                      key={`${part.key}-${index}`}
+                      className="home-hero__prompt-slot"
+                      data-field-name={part.key}
+                      data-filled={part.filled}
+                      data-testid={`home-hero-prompt-slot-${part.key}`}
+                    >
+                      {part.text}
+                    </span>
+                  ) : (
+                    <span key={`text-${index}`}>{part.text}</span>
+                  )
+                ))}
+              </div>
+            ) : null}
+            <textarea
+              ref={ref}
+              className="home-hero__input"
+              data-testid="home-hero-input"
+              value={prompt}
+              onChange={(e) => {
+                onPromptChange(e.target.value);
+                setSelectedIndex(0);
+              }}
+              onCompositionStart={() => {
+                composingRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                composingRef.current = false;
+              }}
+              onKeyDown={(e) => {
+                if (isImeComposing(e, composingRef.current)) return;
+                if (pickerOpen && visiblePickerOptions.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedIndex((idx) => (idx + 1) % visiblePickerOptions.length);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedIndex(
+                      (idx) => (idx - 1 + visiblePickerOptions.length) % visiblePickerOptions.length,
+                    );
+                    return;
+                  }
+                  if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
+                    if (selected && !selected.disabled) selected.onPick();
+                    return;
+                  }
+                }
+                if (
+                  e.key === 'Enter' &&
+                  !e.shiftKey &&
+                  !e.metaKey &&
+                  !e.ctrlKey &&
+                  !e.altKey
+                ) {
+                  e.preventDefault();
+                  if (pickerOpen && visiblePickerOptions.length > 0) {
+                    const selected = visiblePickerOptions[selectedIndex] ?? visiblePickerOptions[0];
+                    if (selected && !selected.disabled) selected.onPick();
+                    return;
+                  }
+                  if (canSubmit) onSubmit();
+                }
+              }}
+              placeholder={placeholder}
+              rows={3}
+              aria-controls={pickerOpen ? 'home-hero-context-picker' : undefined}
+              aria-expanded={pickerOpen}
+            />
+          </div>
+          {pluginInputFields.length > 0 ? (
+            <PluginInputsForm
+              fields={pluginInputFields}
+              values={pluginInputValues}
+              onChange={onPluginInputValuesChange}
+              onValidityChange={onPluginInputValidityChange}
+            />
+          ) : null}
+        </div>
         {pickerOpen ? (
           <div
             id="home-hero-context-picker"
@@ -385,7 +482,10 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
                       className={`home-hero__plugin-option${
                         optionIndex === selectedIndex ? ' is-active' : ''
                       }`}
-                      onMouseEnter={() => setSelectedIndex(optionIndex)}
+                      onMouseEnter={() => {
+                        setSelectedIndex(optionIndex);
+                        setHoveredPlugin(item.pluginRecord ?? null);
+                      }}
                       onMouseDown={(event) => {
                         event.preventDefault();
                         if (!item.disabled) item.onPick();
@@ -407,6 +507,33 @@ export const HomeHero = forwardRef<HTMLTextAreaElement, Props>(function HomeHero
                 })}
               </div>
             ))}
+            {hoveredPlugin ? (
+              <div
+                className="home-hero__plugin-hover-card"
+                data-testid="home-hero-plugin-hover-card"
+              >
+                <div>
+                  <span className="home-hero__plugin-hover-kicker">
+                    {getPluginSourceLabel(hoveredPlugin)}
+                  </span>
+                  <strong>{hoveredPlugin.title}</strong>
+                  <p>{hoveredPlugin.manifest?.description ?? hoveredPlugin.id}</p>
+                </div>
+                <div className="home-hero__plugin-hover-meta">
+                  <span>{(hoveredPlugin.manifest?.od?.inputs ?? []).length} parameters</span>
+                  {getPluginQueryPreview(hoveredPlugin) ? (
+                    <span>{getPluginQueryPreview(hoveredPlugin)}</span>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onOpenPluginDetails(hoveredPlugin)}
+                >
+                  Details
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
         <div className="home-hero__input-foot">
@@ -465,6 +592,66 @@ interface ContextMention {
   start: number;
   end: number;
   query: string;
+}
+
+interface PromptHighlightPart {
+  kind: 'text' | 'slot';
+  text: string;
+  key?: string;
+  filled?: boolean;
+}
+
+const INPUT_PLACEHOLDER_PATTERN = /\{\{\s*([a-zA-Z_][\w-]*)\s*\}\}/g;
+
+function buildPromptHighlightParts(
+  template: string | null,
+  values: Record<string, unknown>,
+  prompt: string,
+): PromptHighlightPart[] | null {
+  if (!template) return null;
+  INPUT_PLACEHOLDER_PATTERN.lastIndex = 0;
+  const parts: PromptHighlightPart[] = [];
+  let rendered = '';
+  let lastIndex = 0;
+  let slotCount = 0;
+  let match: RegExpExecArray | null;
+  while ((match = INPUT_PLACEHOLDER_PATTERN.exec(template)) !== null) {
+    const placeholder = match[0];
+    const key = match[1];
+    if (!key) continue;
+    const literal = template.slice(lastIndex, match.index);
+    if (literal) {
+      parts.push({ kind: 'text', text: literal });
+      rendered += literal;
+    }
+    const replacement = stringifyTemplateValue(values[key], placeholder);
+    parts.push({
+      kind: 'slot',
+      key,
+      text: replacement.text,
+      filled: replacement.filled,
+    });
+    rendered += replacement.text;
+    slotCount += 1;
+    lastIndex = match.index + placeholder.length;
+  }
+  const tail = template.slice(lastIndex);
+  if (tail) {
+    parts.push({ kind: 'text', text: tail });
+    rendered += tail;
+  }
+  if (slotCount === 0 || rendered !== prompt) return null;
+  return parts;
+}
+
+function stringifyTemplateValue(
+  value: unknown,
+  placeholder: string,
+): { text: string; filled: boolean } {
+  if (value === undefined || value === null || value === '') {
+    return { text: placeholder, filled: false };
+  }
+  return { text: String(value), filled: true };
 }
 
 function getContextMention(value: string): ContextMention | null {
@@ -552,6 +739,20 @@ function mcpServerMatchesQuery(server: McpServerConfig, query: string): boolean 
 
 function getPluginSourceLabel(plugin: InstalledPluginRecord): string {
   return plugin.sourceKind === 'bundled' ? 'Official' : 'My plugin';
+}
+
+function getPluginQueryPreview(plugin: InstalledPluginRecord): string {
+  const raw = plugin.manifest?.od?.useCase?.query;
+  const value =
+    typeof raw === 'string'
+      ? raw
+      : raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? raw.en ?? raw['zh-CN'] ?? Object.values(raw).find((entry): entry is string => (
+            typeof entry === 'string' && entry.length > 0
+          )) ?? ''
+        : '';
+  const trimmed = value.replace(/\s+/g, ' ').trim();
+  return trimmed.length > 96 ? `${trimmed.slice(0, 96)}…` : trimmed;
 }
 
 interface RailGroupProps {

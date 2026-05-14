@@ -116,6 +116,10 @@ export interface ProjectMetadata {
   // Batch/API-created projects can opt out of the initial discovery form so
   // the first agent turn builds immediately from the submitted brief.
   skipDiscoveryBrief?: boolean;
+  // Plugins selected through @ mentions on Home. These are additive
+  // context references; the explicit "Use plugin" snapshot, when present,
+  // remains the primary executable plugin for the run.
+  contextPlugins?: Array<{ id: string; title: string; description?: string }>;
 }
 
 export interface Project {

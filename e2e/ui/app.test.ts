@@ -745,7 +745,7 @@ async function runPluginCreateImportFlow(
     expect((await installResponse).ok()).toBeTruthy();
 
     await expect(page.getByText('Installed Query Plugin.')).toBeVisible();
-    await expect(page.getByTestId('plugins-tab-mine')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('plugins-tab-installed')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('[data-plugin-id="query-plugin"]')).toBeVisible();
 
     await page.goto('/');

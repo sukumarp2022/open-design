@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
+  InputFieldSpec,
   InstalledPluginRecord,
   McpServerConfig,
   PluginSourceKind,
@@ -261,5 +262,70 @@ describe('HomeHero plugin picker', () => {
 
     expect(onPickPlugin).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('highlights rendered plugin input values inside the prompt surface', () => {
+    const fields: InputFieldSpec[] = [
+      {
+        name: 'source',
+        label: 'Import source',
+        type: 'select',
+        options: ['folder', 'zip', 'github', 'marketplace'],
+        default: 'marketplace',
+      },
+    ];
+    const prompt =
+      'Create a compact import receipt for community-import-smoke-test installed from marketplace.';
+
+    const { rerender } = render(
+      <HomeHero
+        prompt={prompt}
+        onPromptChange={() => undefined}
+        onSubmit={() => undefined}
+        activePluginTitle="Community Import Smoke Test"
+        activeChipId={null}
+        onClearActivePlugin={() => undefined}
+        pluginInputFields={fields}
+        pluginInputValues={{ source: 'marketplace' }}
+        pluginInputTemplate="Create a compact import receipt for community-import-smoke-test installed from {{source}}."
+        pluginOptions={[]}
+        pluginsLoading={false}
+        pendingPluginId={null}
+        pendingChipId={null}
+        onPickPlugin={() => undefined}
+        onPickChip={() => undefined}
+        contextItemCount={0}
+        error={null}
+      />,
+    );
+
+    const slot = screen.getByTestId('home-hero-prompt-slot-source');
+    expect(slot.textContent).toBe('marketplace');
+    expect(slot.getAttribute('data-filled')).toBe('true');
+    expect(screen.getByDisplayValue('marketplace')).toBeTruthy();
+
+    rerender(
+      <HomeHero
+        prompt={`${prompt} Extra user edit.`}
+        onPromptChange={() => undefined}
+        onSubmit={() => undefined}
+        activePluginTitle="Community Import Smoke Test"
+        activeChipId={null}
+        onClearActivePlugin={() => undefined}
+        pluginInputFields={fields}
+        pluginInputValues={{ source: 'marketplace' }}
+        pluginInputTemplate="Create a compact import receipt for community-import-smoke-test installed from {{source}}."
+        pluginOptions={[]}
+        pluginsLoading={false}
+        pendingPluginId={null}
+        pendingChipId={null}
+        onPickPlugin={() => undefined}
+        onPickChip={() => undefined}
+        contextItemCount={0}
+        error={null}
+      />,
+    );
+
+    expect(screen.queryByTestId('home-hero-prompt-slot-source')).toBeNull();
   });
 });

@@ -16,6 +16,7 @@ async function createResourceTreeCacheKey(config: ToolPackConfig): Promise<strin
     designSystems: await hashPath(join(config.workspaceRoot, "design-systems")),
     designTemplates: await hashPath(join(config.workspaceRoot, "design-templates")),
     node: "win.resource-tree",
+    pluginRegistry: await hashPath(join(config.workspaceRoot, "plugins", "registry")),
     promptTemplates: await hashPath(join(config.workspaceRoot, "prompt-templates")),
     schemaVersion: RESOURCE_TREE_CACHE_SCHEMA_VERSION,
     skills: await hashPath(join(config.workspaceRoot, "skills")),

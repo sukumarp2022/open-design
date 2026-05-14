@@ -65,6 +65,7 @@ import {
   MissingInputError,
   pluginPromptBlock,
   pruneExpiredSnapshots,
+  readPluginLockfile,
   registerBuiltInAtomWorkers,
   registerBundledPlugins,
   resolvePluginSnapshot,
@@ -1024,6 +1025,56 @@ const PROMPT_TEMPLATES_DIR = resolveDaemonResourceDir(
   'prompt-templates',
   path.join(PROJECT_ROOT, 'prompt-templates'),
 );
+const PLUGIN_REGISTRY_DIR = resolveDaemonResourceDir(
+  DAEMON_RESOURCE_ROOT,
+  'plugins/registry',
+  path.join(PROJECT_ROOT, 'plugins', 'registry'),
+);
+const OFFICIAL_MARKETPLACE_ID = 'official';
+const OFFICIAL_MARKETPLACE_URL = 'https://open-design.ai/marketplace/open-design-marketplace.json';
+const OFFICIAL_PLUGIN_SOURCE_REPO = 'github:nexu-io/open-design@main';
+const DEFAULT_MARKETPLACE_SEED_BASE_URL = 'https://open-design.ai/marketplace';
+const DEFAULT_MARKETPLACE_SEEDS = new Map([
+  [OFFICIAL_MARKETPLACE_ID, {
+    trust: 'official',
+    url:   OFFICIAL_MARKETPLACE_URL,
+  }],
+  ['community', {
+    trust: 'restricted',
+    url:   `${DEFAULT_MARKETPLACE_SEED_BASE_URL}/community/open-design-marketplace.json`,
+  }],
+]);
+
+function bundledPluginRegistrySource(sourcePath) {
+  const rel = path.relative(PROJECT_ROOT, sourcePath).split(path.sep).join('/');
+  if (!rel || rel.startsWith('..')) return sourcePath;
+  return `${OFFICIAL_PLUGIN_SOURCE_REPO}/${rel}`;
+}
+
+function mergeMarketplaceEntries(manifestText, entries) {
+  try {
+    const parsed = JSON.parse(manifestText);
+    const plugins = Array.isArray(parsed.plugins) ? parsed.plugins : [];
+    const seen = new Set(plugins.map((entry) => String(entry?.name ?? '').toLowerCase()));
+    const generated = entries.filter((entry) => {
+      const key = String(entry.name ?? '').toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return JSON.stringify({
+      ...parsed,
+      metadata: {
+        ...(parsed.metadata && typeof parsed.metadata === 'object' ? parsed.metadata : {}),
+        bundledPreinstallCount: entries.length,
+      },
+      plugins: [...plugins, ...generated],
+    });
+  } catch {
+    return manifestText;
+  }
+}
+
 export function resolveDataDir(raw, projectRoot) {
   if (!raw) return path.join(projectRoot, '.od');
   // expandHomePrefix is shared with media-config.ts so OD_DATA_DIR and
@@ -1061,6 +1112,7 @@ export function resolveDataDir(raw, projectRoot) {
   return resolved;
 }
 const RUNTIME_DATA_DIR = resolveDataDir(process.env.OD_DATA_DIR, PROJECT_ROOT);
+const PLUGIN_LOCKFILE_PATH = path.join(RUNTIME_DATA_DIR, 'od-plugin-lock.json');
 // Canonical (realpath-resolved) form of RUNTIME_DATA_DIR for the few callers
 // that compare it against a user-supplied realpath() result. On macOS, /var
 // is a symlink to /private/var, so an import realpath lands in /private/var
@@ -2629,6 +2681,7 @@ export async function startServer({
     console.log('[od] Codex plugins disabled via OD_CODEX_DISABLE_PLUGINS=1');
   }
 
+  let bundledMarketplaceEntries = [];
   // Plan §3.I3 / spec §23.3.5 — register every plugin under
   // <projectRoot>/plugins/_official/** as a bundled plugin. The walker
   // is idempotent (upserts on every boot) so a daemon upgrade rotates
@@ -2638,7 +2691,26 @@ export async function startServer({
     const result = await registerBundledPlugins({
       db,
       bundledRoot: defaultBundledRoot(PROJECT_ROOT),
+      marketplaceProvenance: {
+        sourceMarketplaceId: OFFICIAL_MARKETPLACE_ID,
+        marketplaceTrust:    'official',
+        entryNamePrefix:     'open-design',
+      },
     });
+    bundledMarketplaceEntries = result.registered.map((plugin) => ({
+      name:        `open-design/${plugin.id}`,
+      title:       plugin.title,
+      description: plugin.description,
+      version:     plugin.version,
+      source:      bundledPluginRegistrySource(plugin.source),
+      publisher:   { id: 'open-design', url: 'https://open-design.ai' },
+      homepage:    plugin.manifest.homepage,
+      license:     plugin.manifest.license,
+      tags:        plugin.tags,
+      capabilitiesSummary: Array.isArray(plugin.manifest.od?.capabilities)
+        ? plugin.manifest.od.capabilities
+        : undefined,
+    }));
     if (result.registered.length > 0) {
       console.log(`[plugins] registered ${result.registered.length} bundled plugin(s)`);
     }
@@ -2647,6 +2719,41 @@ export async function startServer({
     }
   } catch (err) {
     console.warn(`[plugins] bundled registration failed: ${(err)?.message ?? err}`);
+  }
+
+  try {
+    const seedDirs = await fs.promises.readdir(PLUGIN_REGISTRY_DIR, { withFileTypes: true }).catch((err) => {
+      if (err?.code === 'ENOENT') return [];
+      throw err;
+    });
+    const { ensureMarketplaceManifest } = await import('./plugins/marketplaces.js');
+    for (const dirent of seedDirs) {
+      if (!dirent.isDirectory()) continue;
+      const id = dirent.name;
+      const manifestPath = path.join(PLUGIN_REGISTRY_DIR, id, 'open-design-marketplace.json');
+      if (!fs.existsSync(manifestPath)) continue;
+      let manifestText = await fs.promises.readFile(manifestPath, 'utf8');
+      if (id === OFFICIAL_MARKETPLACE_ID && bundledMarketplaceEntries.length > 0) {
+        manifestText = mergeMarketplaceEntries(manifestText, bundledMarketplaceEntries);
+      }
+      const configured = DEFAULT_MARKETPLACE_SEEDS.get(id) ?? {
+        trust: 'restricted',
+        url:   `${DEFAULT_MARKETPLACE_SEED_BASE_URL}/${id}/open-design-marketplace.json`,
+      };
+      const result = ensureMarketplaceManifest(db, {
+        id,
+        url: configured.url,
+        trust: configured.trust,
+        manifestText,
+      });
+      if (result.ok) {
+        console.log(`[plugins] seeded ${id} registry source (${result.row.manifest.plugins.length} plugin(s))`);
+      } else {
+        console.warn(`[plugins] ${id} registry seed failed: ${result.message}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`[plugins] registry seed failed: ${(err)?.message ?? err}`);
   }
 
   // Plan §3.A5 / spec §16 Phase 5 / PB2: periodic snapshot GC. Disabled
@@ -4098,6 +4205,7 @@ export async function startServer({
         source,
         _stagedFolder: pluginRoot,
         _stagedSourceKind: 'user',
+        lockfilePath: PLUGIN_LOCKFILE_PATH,
       })) {
         if (ev.message) log.push(ev.message);
         if (Array.isArray(ev.warnings)) warnings.splice(0, warnings.length, ...ev.warnings);
@@ -4242,6 +4350,16 @@ export async function startServer({
   app.post('/api/plugins/install', async (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     let source = typeof body.source === 'string' ? body.source : '';
+    let marketplaceResolution: {
+      marketplaceId: string;
+      marketplaceTrust: 'official' | 'trusted' | 'restricted';
+      pluginName: string;
+      pluginVersion: string;
+      source: string;
+      ref?: string;
+      manifestDigest?: string;
+      archiveIntegrity?: string;
+    } | null = null;
     if (!source) {
       return res.status(400).json({ error: 'source is required' });
     }
@@ -4259,7 +4377,13 @@ export async function startServer({
       // the same byte path that would happen if the user copy-pasted
       // the source manually.
       const { resolvePluginInMarketplaces } = await import('./plugins/marketplaces.js');
-      const resolved = resolvePluginInMarketplaces(db, source);
+      let lookupName = source;
+      const lockfile = await readPluginLockfile(PLUGIN_LOCKFILE_PATH);
+      const locked = lockfile.plugins[source];
+      if (locked?.version && !source.includes('@')) {
+        lookupName = `${source}@${locked.version}`;
+      }
+      const resolved = resolvePluginInMarketplaces(db, lookupName);
       if (!resolved) {
         return res.status(404).json({
           error: {
@@ -4269,6 +4393,7 @@ export async function startServer({
           },
         });
       }
+      marketplaceResolution = resolved;
       source = resolved.source;
     }
 
@@ -4282,7 +4407,18 @@ export async function startServer({
     };
 
     try {
-      for await (const ev of installPlugin(db, { source })) {
+      for await (const ev of installPlugin(db, {
+        source,
+        sourceMarketplaceId: marketplaceResolution?.marketplaceId,
+        sourceMarketplaceEntryName: marketplaceResolution?.pluginName,
+        sourceMarketplaceEntryVersion: marketplaceResolution?.pluginVersion,
+        marketplaceTrust: marketplaceResolution?.marketplaceTrust,
+        resolvedSource: marketplaceResolution?.source,
+        resolvedRef: marketplaceResolution?.ref,
+        manifestDigest: marketplaceResolution?.manifestDigest,
+        archiveIntegrity: marketplaceResolution?.archiveIntegrity,
+        lockfilePath: PLUGIN_LOCKFILE_PATH,
+      })) {
         writeEvent(ev.kind, ev);
         if (ev.kind === 'success' || ev.kind === 'error') break;
       }
@@ -4317,6 +4453,8 @@ export async function startServer({
   // daemon's authoritative copy and confuse the next boot.
   app.post('/api/plugins/:id/upgrade', async (req, res) => {
     const id = req.params.id;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const policy = body.policy === 'pinned' ? 'pinned' : 'latest';
     const plugin = getInstalledPlugin(db, id);
     if (!plugin) {
       return res.status(404).json({
@@ -4332,7 +4470,24 @@ export async function startServer({
         },
       });
     }
-    const source = plugin.source;
+    let source = plugin.source;
+    let marketplaceResolution: {
+      marketplaceId: string;
+      marketplaceTrust: 'official' | 'trusted' | 'restricted';
+      pluginName: string;
+      pluginVersion: string;
+      source: string;
+      ref?: string;
+      manifestDigest?: string;
+      archiveIntegrity?: string;
+    } | null = null;
+    if (policy === 'latest' && plugin.sourceMarketplaceEntryName) {
+      const { resolvePluginInMarketplaces } = await import('./plugins/marketplaces.js');
+      marketplaceResolution = resolvePluginInMarketplaces(db, plugin.sourceMarketplaceEntryName);
+      if (marketplaceResolution) {
+        source = marketplaceResolution.source;
+      }
+    }
     if (!source) {
       return res.status(409).json({
         error: {
@@ -4352,10 +4507,22 @@ export async function startServer({
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    writeEvent('progress', { kind: 'progress', phase: 'resolving', message: `Upgrading ${id} from ${source}` });
+    writeEvent('progress', { kind: 'progress', phase: 'resolving', message: `Upgrading ${id} from ${source} (policy=${policy})` });
 
     try {
-      for await (const ev of installPlugin(db, { source, eventKind: 'upgraded' })) {
+      for await (const ev of installPlugin(db, {
+        source,
+        eventKind: 'upgraded',
+        sourceMarketplaceId: marketplaceResolution?.marketplaceId ?? plugin.sourceMarketplaceId,
+        sourceMarketplaceEntryName: marketplaceResolution?.pluginName ?? plugin.sourceMarketplaceEntryName,
+        sourceMarketplaceEntryVersion: marketplaceResolution?.pluginVersion ?? plugin.sourceMarketplaceEntryVersion,
+        marketplaceTrust: marketplaceResolution?.marketplaceTrust ?? plugin.marketplaceTrust,
+        resolvedSource: marketplaceResolution?.source ?? plugin.resolvedSource,
+        resolvedRef: marketplaceResolution?.ref ?? plugin.resolvedRef,
+        manifestDigest: marketplaceResolution?.manifestDigest ?? plugin.manifestDigest,
+        archiveIntegrity: marketplaceResolution?.archiveIntegrity ?? plugin.archiveIntegrity,
+        lockfilePath: PLUGIN_LOCKFILE_PATH,
+      })) {
         writeEvent(ev.kind, ev);
         if (ev.kind === 'success' || ev.kind === 'error') break;
       }

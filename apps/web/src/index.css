@@ -18808,14 +18808,19 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-muted);
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--radius-sm, 6px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+}
+.plugin-details-modal__close svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
 }
 .plugin-details-modal__close:hover,
 .plugin-details-modal__close:focus-visible {

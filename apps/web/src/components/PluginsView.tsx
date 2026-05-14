@@ -45,11 +45,14 @@ const PLUGINS_TABS: ReadonlyArray<{
   label: string;
   hint: string;
 }> = [
-  { id: 'installed', label: 'Installed', hint: 'Ready to use' },
+  { id: 'installed', label: 'Installed', hint: 'Your plugins' },
   { id: 'available', label: 'Available', hint: 'From sources' },
   { id: 'sources', label: 'Sources', hint: 'Catalogs' },
   { id: 'team', label: 'Team', hint: 'Enterprise' },
 ];
+
+const COMMUNITY_MARKETPLACE_SOURCE_URL =
+  'https://raw.githubusercontent.com/nexu-io/open-design/garnet-hemisphere/plugins/registry/community/open-design-marketplace.json';
 
 const PLUGIN_SHARE_DETAILS: Record<PluginShareAction, {
   eyebrow: string;
@@ -86,6 +89,7 @@ const PLUGIN_SHARE_DETAILS: Record<PluginShareAction, {
 
 interface PluginsViewProps {
   onCreatePlugin?: (goal?: string) => void;
+  onUsePlugin?: (record: InstalledPluginRecord) => void;
   onCreatePluginShareProject?: (
     pluginId: string,
     action: PluginShareAction,
@@ -95,6 +99,7 @@ interface PluginsViewProps {
 
 export function PluginsView({
   onCreatePlugin,
+  onUsePlugin,
   onCreatePluginShareProject,
 }: PluginsViewProps) {
   const { locale } = useI18n();
@@ -136,10 +141,6 @@ export function PluginsView({
     return () => window.removeEventListener('open-design:plugins-changed', refresh);
   }, []);
 
-  const officialPlugins = useMemo(
-    () => plugins.filter((plugin) => plugin.sourceKind === 'bundled'),
-    [plugins],
-  );
   const userPlugins = useMemo(
     () => plugins.filter((plugin) => USER_SOURCE_KINDS.has(plugin.sourceKind)),
     [plugins],
@@ -165,6 +166,11 @@ export function PluginsView({
   }
 
   async function handleUsePlugin(record: InstalledPluginRecord) {
+    if (onUsePlugin) {
+      setDetailsRecord(null);
+      onUsePlugin(record);
+      return;
+    }
     setPendingApplyId(record.id);
     setNotice(null);
     const result = await applyPlugin(record.id, { locale });
@@ -281,7 +287,7 @@ export function PluginsView({
       </header>
 
       <div className="plugins-view__stats" aria-label="Plugin summary">
-        <StatCard label="Installed" value={plugins.length} />
+        <StatCard label="Installed" value={userPlugins.length} />
         <StatCard label="Available" value={availablePlugins.length} />
         <StatCard label="Sources" value={marketplaces.length} />
       </div>
@@ -317,37 +323,22 @@ export function PluginsView({
         {loading ? <div className="plugins-view__empty">Loading plugins…</div> : null}
 
         {!loading && activeTab === 'installed' ? (
-          <>
-            <PluginsHomeSection
-              plugins={officialPlugins}
-              loading={false}
-              activePluginId={activePlugin?.record.id ?? null}
-              pendingApplyId={pendingApplyId}
-              pendingShareAction={pendingShareAction}
-              onUse={(record) => void handleUsePlugin(record)}
-              onOpenDetails={setDetailsRecord}
-              onCreatePlugin={onCreatePlugin}
-              title="Official"
-              subtitle="Bundled Open Design workflows already available in this runtime."
-              emptyMessage="No official plugins are registered yet. Restart the daemon if this looks wrong."
-            />
-            <PluginsHomeSection
-              plugins={userPlugins}
-              loading={false}
-              activePluginId={activePlugin?.record.id ?? null}
-              pendingApplyId={pendingApplyId}
-              pendingShareAction={pendingShareAction}
-              onUse={(record) => void handleUsePlugin(record)}
-              onOpenDetails={setDetailsRecord}
-              onPluginShareAction={(record, action) =>
-                requestPluginShareTask(record, action)
-              }
-              onCreatePlugin={onCreatePlugin}
-              title="My plugins"
-              subtitle="Local, imported, and marketplace-installed plugins in your user registry."
-              emptyMessage="No user plugins yet. Use Create / Import or install an Available entry."
-            />
-          </>
+          <PluginsHomeSection
+            plugins={userPlugins}
+            loading={false}
+            activePluginId={activePlugin?.record.id ?? null}
+            pendingApplyId={pendingApplyId}
+            pendingShareAction={pendingShareAction}
+            onUse={(record) => void handleUsePlugin(record)}
+            onOpenDetails={setDetailsRecord}
+            onPluginShareAction={(record, action) =>
+              requestPluginShareTask(record, action)
+            }
+            onCreatePlugin={onCreatePlugin}
+            title="Installed plugins"
+            subtitle="Plugins you imported or installed from marketplace sources."
+            emptyMessage="No installed user plugins yet. Use Create / Import or install an Available entry."
+          />
         ) : null}
 
         {!loading && activeTab === 'available' ? (
@@ -484,7 +475,7 @@ function PluginShareConfirmModal({
             aria-label="Close share confirmation"
             title="Close"
           >
-            <Icon name="close" size={14} />
+            <Icon name="close" size={18} />
           </button>
         </header>
 
@@ -774,7 +765,7 @@ function SourcesPanel({
             id="plugin-marketplace-url"
             value={url}
             onChange={(event) => setUrl(event.target.value)}
-            placeholder="https://open-design.ai/marketplace/open-design-marketplace.json"
+            placeholder={COMMUNITY_MARKETPLACE_SOURCE_URL}
             disabled={pendingAction === 'add'}
           />
           <select
@@ -854,7 +845,7 @@ function SourcesPanel({
   );
 }
 
-type ImportKind = 'github' | 'zip' | 'folder' | 'template';
+type ImportKind = 'github' | 'zip' | 'folder';
 
 function PluginImportModal({
   onClose,
@@ -906,7 +897,7 @@ function PluginImportModal({
         <header className="plugins-import-modal__head">
           <div>
             <p className="plugins-view__kicker">User plugins</p>
-            <h2 id="plugins-import-title">Create or import a plugin</h2>
+            <h2 id="plugins-import-title">Import a plugin</h2>
           </div>
           <button
             type="button"
@@ -939,13 +930,6 @@ function PluginImportModal({
             title="Upload folder"
             body="Upload a plugin directory."
             onClick={() => setKind('folder')}
-          />
-          <ImportChoice
-            active={kind === 'template'}
-            icon="edit"
-            title="Create from template"
-            body="Coming soon."
-            onClick={() => setKind('template')}
           />
         </nav>
 
@@ -1007,21 +991,6 @@ function PluginImportModal({
             />
           ) : null}
 
-          {kind === 'template' ? (
-            <section className="plugins-import-modal__coming">
-              <span className="plugins-view__future-icon" aria-hidden>
-                <Icon name="edit" size={18} />
-              </span>
-              <div>
-                <p className="plugins-view__kicker">Coming soon</p>
-                <h3>Create from template</h3>
-                <p>
-                  Template authoring will scaffold manifest metadata, examples,
-                  preview assets, and starter instructions in a future pass.
-                </p>
-              </div>
-            </section>
-          ) : null}
         </div>
 
         <footer className="plugins-import-modal__foot">
@@ -1050,7 +1019,7 @@ function ImportChoice({
   onClick,
 }: {
   active: boolean;
-  icon: 'github' | 'upload' | 'folder' | 'edit';
+  icon: 'github' | 'upload' | 'folder';
   title: string;
   body: string;
   onClick: () => void;
@@ -1155,6 +1124,9 @@ function pluginLookupKeys(plugin: InstalledPluginRecord): string[] {
   const keys = new Set<string>();
   keys.add(normalizePluginName(plugin.id));
   if (plugin.manifest?.name) keys.add(normalizePluginName(plugin.manifest.name));
+  if (plugin.sourceMarketplaceEntryName) {
+    keys.add(normalizePluginName(plugin.sourceMarketplaceEntryName));
+  }
   return Array.from(keys);
 }
 
