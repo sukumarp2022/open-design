@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +25,9 @@ type RawPluginEntry = {
   homepage?: unknown;
   license?: unknown;
   capabilitiesSummary?: unknown;
+  mode?: unknown;
+  taskKind?: unknown;
+  preview?: unknown;
   yanked?: unknown;
   deprecated?: unknown;
 };
@@ -41,9 +44,20 @@ type RawPluginManifest = {
 };
 
 type RawOdMetadata = {
+  kind?: unknown;
   mode?: unknown;
+  surface?: unknown;
   taskKind?: unknown;
   capabilities?: unknown;
+  preview?: unknown;
+};
+
+export type PublicPluginPreview = {
+  type: 'html' | 'image' | 'video';
+  label: string;
+  poster: string | undefined;
+  frameHref: string | undefined;
+  localHtmlPath: string | undefined;
 };
 
 export type PublicPluginEntry = {
@@ -69,6 +83,9 @@ export type PublicPluginEntry = {
   integrity: string | undefined;
   mode: string | undefined;
   taskKind: string | undefined;
+  surface: string | undefined;
+  visualKind: string;
+  preview: PublicPluginPreview | undefined;
   yanked: boolean;
   deprecated: boolean;
   searchText: string;
@@ -117,6 +134,14 @@ const asStringArray = (value: unknown): string[] =>
 
 const toPosix = (value: string) => value.split(path.sep).join('/');
 
+const isFile = (filePath: string) => {
+  try {
+    return statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+};
+
 const normalizeTrust = (value: unknown, fallback: TrustTier): TrustTier => {
   const trust = asString(value);
   if (trust === 'official' || trust === 'trusted' || trust === 'restricted') {
@@ -144,6 +169,9 @@ const slugSegment = (value: string) =>
 const detailHrefFor = (id: string) =>
   `/plugins/${id.split('/').map(slugSegment).join('/')}/`;
 
+const previewHrefFor = (id: string) =>
+  `/plugins/previews/${id.split('/').map(slugSegment).join('/')}/`;
+
 const sourceUrlFromSource = (source: string): string | undefined => {
   const match = /^github:([^/]+)\/([^@]+)@([^/]+)\/(.+)$/.exec(source);
   if (!match) {
@@ -157,6 +185,115 @@ const sourceUrlFromSource = (source: string): string | undefined => {
 
 const registryUrlFor = (registryId: string) =>
   `${RAW_REPO}/plugins/registry/${registryId}/open-design-marketplace.json`;
+
+const previewLabelFor = (type: string | undefined) => {
+  if (type === 'image') return 'Image preview';
+  if (type === 'video') return 'Video poster';
+  return 'Live HTML preview';
+};
+
+const localPluginPath = (pluginDir: string, entry: string): string | undefined => {
+  const resolved = path.resolve(pluginDir, entry);
+  const root = path.resolve(pluginDir);
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    return undefined;
+  }
+  return isFile(resolved) ? resolved : undefined;
+};
+
+const previewFrom = (
+  pluginDir: string | undefined,
+  id: string,
+  rawPreview: unknown,
+): PublicPluginPreview | undefined => {
+  const preview = asRecord(rawPreview);
+  const rawType = asString(preview?.type);
+  const poster = asString(preview?.poster);
+  const entry = asString(preview?.entry);
+  const url = asString(preview?.url);
+
+  if (rawType === 'image' || (!rawType && poster)) {
+    return {
+      type: 'image',
+      label: previewLabelFor('image'),
+      poster,
+      frameHref: undefined,
+      localHtmlPath: undefined,
+    };
+  }
+
+  if (rawType === 'video') {
+    return {
+      type: 'video',
+      label: previewLabelFor('video'),
+      poster,
+      frameHref: undefined,
+      localHtmlPath: undefined,
+    };
+  }
+
+  if (rawType === 'html') {
+    const localHtmlPath =
+      pluginDir && entry ? localPluginPath(pluginDir, entry) : undefined;
+    if (localHtmlPath) {
+      return {
+        type: 'html',
+        label: previewLabelFor('html'),
+        poster,
+        frameHref: previewHrefFor(id),
+        localHtmlPath,
+      };
+    }
+  }
+
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    return {
+      type: 'html',
+      label: previewLabelFor('html'),
+      poster,
+      frameHref: url,
+      localHtmlPath: undefined,
+    };
+  }
+
+  return undefined;
+};
+
+const visualKindFor = (
+  title: string,
+  tags: string[],
+  capabilities: string[],
+  mode: string | undefined,
+  surface: string | undefined,
+  preview: PublicPluginPreview | undefined,
+) => {
+  const haystack = [
+    title,
+    mode,
+    surface,
+    preview?.type,
+    ...tags,
+    ...capabilities,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (preview?.type === 'image' || haystack.includes('image')) return 'image';
+  if (preview?.type === 'video' || haystack.includes('video')) return 'video';
+  if (
+    haystack.includes('deck') ||
+    haystack.includes('ppt') ||
+    haystack.includes('slide') ||
+    haystack.includes('presentation')
+  ) {
+    return 'deck';
+  }
+  if (haystack.includes('dashboard') || haystack.includes('report')) return 'dashboard';
+  if (haystack.includes('design-system') || haystack.includes('system')) return 'system';
+  if (haystack.includes('atom')) return 'atom';
+  return 'workflow';
+};
 
 const readJson = <T>(filePath: string): T | undefined => {
   try {
@@ -205,6 +342,10 @@ const entryFromMarketplace = (
   const version = asString(rawEntry.version) ?? '0.1.0';
   const publisher = publisherLabel(rawEntry.publisher);
   const detailHref = detailHrefFor(id);
+  const mode = asString(rawEntry.mode);
+  const taskKind = asString(rawEntry.taskKind);
+  const surface = undefined;
+  const preview = previewFrom(undefined, id, rawEntry.preview);
 
   return {
     id,
@@ -227,8 +368,11 @@ const entryFromMarketplace = (
     homepage: asString(rawEntry.homepage),
     license: asString(rawEntry.license),
     integrity: asString(rawEntry.integrity),
-    mode: undefined,
-    taskKind: undefined,
+    mode,
+    taskKind,
+    surface,
+    visualKind: visualKindFor(title, tags, capabilities, mode, surface, preview),
+    preview,
     yanked: asBoolean(rawEntry.yanked),
     deprecated: asBoolean(rawEntry.deprecated),
     searchText: [
@@ -238,6 +382,8 @@ const entryFromMarketplace = (
       registryName,
       trust,
       publisher,
+      mode,
+      taskKind,
       ...tags,
       ...capabilities,
     ]
@@ -312,6 +458,10 @@ const officialEntryFromManifest = (manifestPath: string): PublicPluginEntry | un
     asString(manifest?.description) ??
     'First-party Open Design workflow packaged as a portable plugin.';
   const detailHref = detailHrefFor(id);
+  const mode = asString(od?.mode);
+  const taskKind = asString(od?.taskKind);
+  const surface = asString(od?.surface);
+  const preview = previewFrom(pluginDir, id, od?.preview);
 
   return {
     id,
@@ -334,8 +484,11 @@ const officialEntryFromManifest = (manifestPath: string): PublicPluginEntry | un
     homepage: asString(manifest?.homepage),
     license: asString(manifest?.license),
     integrity: undefined,
-    mode: asString(od?.mode),
-    taskKind: asString(od?.taskKind),
+    mode,
+    taskKind,
+    surface,
+    visualKind: visualKindFor(title, tags, capabilities, mode, surface, preview),
+    preview,
     yanked: false,
     deprecated: false,
     searchText: [
@@ -344,6 +497,9 @@ const officialEntryFromManifest = (manifestPath: string): PublicPluginEntry | un
       description,
       'Official',
       'official',
+      mode,
+      taskKind,
+      surface,
       ...tags,
       ...capabilities,
     ]
@@ -366,7 +522,32 @@ export const getPublicPlugins = (): PublicPluginEntry[] => {
   }
 
   for (const entry of loadBundledOfficialEntries()) {
-    if (!byId.has(entry.id)) {
+    const existing = byId.get(entry.id);
+    if (existing) {
+      const preview = existing.preview ?? entry.preview;
+      const mode = existing.mode ?? entry.mode;
+      const taskKind = existing.taskKind ?? entry.taskKind;
+      const surface = existing.surface ?? entry.surface;
+      const tags = existing.tags.length > 0 ? existing.tags : entry.tags;
+      const capabilities =
+        existing.capabilities.length > 0 ? existing.capabilities : entry.capabilities;
+
+      byId.set(entry.id, {
+        ...existing,
+        mode,
+        taskKind,
+        surface,
+        preview,
+        visualKind: visualKindFor(
+          existing.title,
+          tags,
+          capabilities,
+          mode,
+          surface,
+          preview,
+        ),
+      });
+    } else {
       byId.set(entry.id, entry);
     }
   }
@@ -388,3 +569,16 @@ export const getRegistryCounts = (plugins = getPublicPlugins()) => ({
   community: plugins.filter((plugin) => plugin.registryId === 'community').length,
   restricted: plugins.filter((plugin) => plugin.trust === 'restricted').length,
 });
+
+export const getPluginPreviewHtml = (plugin: PublicPluginEntry): string | undefined => {
+  const filePath = plugin.preview?.localHtmlPath;
+  if (!filePath) {
+    return undefined;
+  }
+
+  try {
+    return readFileSync(filePath, 'utf8');
+  } catch {
+    return undefined;
+  }
+};

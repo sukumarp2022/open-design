@@ -4,6 +4,10 @@
 `open-design-marketplace.json`，`Available` 是供应池，`Installed` 才是 agent
 可消费集合，official/community/self-hosted 都通过同一套 registry source 模型进入系统。
 
+插件系统整体进度、运行顺序和发布验收总表见
+[`plugin-system-test-suite.md`](./plugin-system-test-suite.md)。本文只保留
+registry / distribution / website / multi-source 的细分用例。
+
 ## 已自动化
 
 | ID | 场景 | 核心断言 | 覆盖文件 |
