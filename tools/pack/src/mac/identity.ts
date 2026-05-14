@@ -5,6 +5,7 @@ import { PRODUCT_NAME } from "./constants.js";
 
 export type MacInstallIdentity = {
   appId: string;
+  executableName: string;
   productName: string;
   publicAppBundleName: string;
   systemAppBundleName: string;
@@ -36,6 +37,7 @@ export function resolveMacInstallIdentity(config: Pick<ToolPackConfig, "namespac
 
   return {
     ...channelIdentity,
+    executableName: channelIdentity.productName,
     publicAppBundleName,
     systemAppBundleName,
   };

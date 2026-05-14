@@ -104,7 +104,7 @@ export async function runElectronBuilder(
     },
     electronDist: config.electronDistPath,
     electronVersion: config.electronVersion,
-    executableName: PRODUCT_NAME,
+    executableName: identity.executableName,
     extraMetadata: {
       main: "./main.cjs",
       name: "open-design-packaged-app",

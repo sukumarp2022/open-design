@@ -133,7 +133,7 @@ function commandMatchesDesktopMarker(
   command: string,
   marker: DesktopRootIdentityMarker,
 ): boolean {
-  return command.includes(marker.executablePath) || command.includes(macAppExecutablePath(marker.appPath));
+  return command.includes(marker.executablePath) || command.includes(macAppExecutablePath(marker.appPath, basename(marker.executablePath)));
 }
 
 async function resolveDesktopRootIdentityFallback(config: ToolPackConfig): Promise<{
@@ -446,6 +446,7 @@ async function resolvePackedMacStartTarget(config: ToolPackConfig): Promise<{
   source: MacStartSource;
 }> {
   const paths = resolveMacPaths(config);
+  const identity = resolveMacInstallIdentity(config);
   const candidates: Array<{ appPath: string; source: MacStartSource }> = [
     { appPath: paths.installedAppPath, source: "installed" },
     { appPath: paths.userApplicationsAppPath, source: "user-applications" },
@@ -454,7 +455,7 @@ async function resolvePackedMacStartTarget(config: ToolPackConfig): Promise<{
   ];
 
   for (const candidate of candidates) {
-    const executablePath = macAppExecutablePath(candidate.appPath);
+    const executablePath = macAppExecutablePath(candidate.appPath, identity.executableName);
     if (await pathExists(executablePath)) {
       return { ...candidate, executablePath };
     }

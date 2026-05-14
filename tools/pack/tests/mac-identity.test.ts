@@ -56,6 +56,7 @@ describe("resolveMacInstallIdentity", () => {
 
     expect(resolveMacInstallIdentity(config)).toEqual({
       appId: "io.open-design.desktop.beta",
+      executableName: "Open Design Beta",
       productName: "Open Design Beta",
       publicAppBundleName: "Open Design Beta.app",
       systemAppBundleName: "Open Design Beta.app",
@@ -68,6 +69,7 @@ describe("resolveMacInstallIdentity", () => {
 
     expect(resolveMacInstallIdentity(config)).toEqual({
       appId: "io.open-design.desktop.preview",
+      executableName: "Open Design Preview",
       productName: "Open Design Preview",
       publicAppBundleName: "Open Design Preview.app",
       systemAppBundleName: "Open Design Preview.app",
