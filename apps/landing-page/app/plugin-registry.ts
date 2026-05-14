@@ -537,6 +537,8 @@ export const getPublicPlugins = (): PublicPluginEntry[] => {
         mode,
         taskKind,
         surface,
+        tags,
+        capabilities,
         preview,
         visualKind: visualKindFor(
           existing.title,
