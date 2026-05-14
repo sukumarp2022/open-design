@@ -35,6 +35,7 @@ const DESKTOP_LOG_ECHO_ENV = "OD_DESKTOP_LOG_ECHO";
 
 const INTERNAL_PACKAGES = [
   { directory: "packages/contracts", name: "@open-design/contracts" },
+  { directory: "packages/registry-protocol", name: "@open-design/registry-protocol" },
   { directory: "packages/sidecar-proto", name: "@open-design/sidecar-proto" },
   { directory: "packages/sidecar", name: "@open-design/sidecar" },
   { directory: "packages/platform", name: "@open-design/platform" },
@@ -300,6 +301,7 @@ async function buildWorkspaceArtifacts(config: ToolPackConfig): Promise<void> {
   const previousWebNextEnv = await readFile(webNextEnvPath, "utf8").catch(() => null);
 
   await runPnpm(config, ["--filter", "@open-design/contracts", "build"]);
+  await runPnpm(config, ["--filter", "@open-design/registry-protocol", "build"]);
   await runPnpm(config, ["--filter", "@open-design/sidecar-proto", "build"]);
   await runPnpm(config, ["--filter", "@open-design/sidecar", "build"]);
   await runPnpm(config, ["--filter", "@open-design/platform", "build"]);

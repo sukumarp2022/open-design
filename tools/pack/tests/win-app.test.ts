@@ -9,6 +9,7 @@ import { createWorkspaceTarballsCacheKey } from "../src/win/app.js";
 
 const PACKAGE_DIRS = [
   "packages/contracts",
+  "packages/registry-protocol",
   "packages/sidecar-proto",
   "packages/sidecar",
   "packages/platform",

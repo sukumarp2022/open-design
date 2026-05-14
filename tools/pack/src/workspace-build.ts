@@ -8,6 +8,7 @@ import { hashPackageSourcePath } from "./package-source-hash.js";
 
 const WORKSPACE_BUILD_PACKAGES = [
   { directory: "packages/contracts", name: "@open-design/contracts" },
+  { directory: "packages/registry-protocol", name: "@open-design/registry-protocol" },
   { directory: "packages/sidecar-proto", name: "@open-design/sidecar-proto" },
   { directory: "packages/sidecar", name: "@open-design/sidecar" },
   { directory: "packages/platform", name: "@open-design/platform" },
@@ -21,6 +22,7 @@ const WORKSPACE_BUILD_PACKAGES = [
 
 const BUILD_COMMANDS = [
   { args: ["--filter", "@open-design/contracts", "build"] },
+  { args: ["--filter", "@open-design/registry-protocol", "build"] },
   { args: ["--filter", "@open-design/sidecar-proto", "build"] },
   { args: ["--filter", "@open-design/sidecar", "build"] },
   { args: ["--filter", "@open-design/platform", "build"] },
@@ -91,6 +93,8 @@ function workspaceBuildOutputFiles(config: ToolPackConfig): string[] {
   return [
     "packages/contracts/dist/index.mjs",
     "packages/contracts/dist/index.d.ts",
+    "packages/registry-protocol/dist/index.mjs",
+    "packages/registry-protocol/dist/index.d.ts",
     "packages/sidecar-proto/dist/index.mjs",
     "packages/sidecar-proto/dist/index.d.ts",
     "packages/sidecar/dist/index.mjs",
@@ -117,6 +121,7 @@ function workspaceBuildOutputFiles(config: ToolPackConfig): string[] {
 function workspaceBuildArtifacts(config: ToolPackConfig): WorkspaceBuildArtifact[] {
   const artifacts = [
     "packages/contracts/dist",
+    "packages/registry-protocol/dist",
     "packages/sidecar-proto/dist",
     "packages/sidecar/dist",
     "packages/platform/dist",

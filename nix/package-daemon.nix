@@ -136,6 +136,9 @@ in
 
       for target in \
         packages/contracts \
+        packages/registry-protocol \
+        packages/agui-adapter \
+        packages/plugin-runtime \
         packages/sidecar-proto \
         packages/sidecar \
         packages/platform \
